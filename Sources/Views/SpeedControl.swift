@@ -62,7 +62,7 @@ struct SpeedControl: View {
                         .font(.system(size: 13, weight: .medium, design: .monospaced))
                         .multilineTextAlignment(.center)
                         .frame(width: 56)
-                        .onSubmit(applyCustom)
+                        .onSubmit { applyCustom() }
                     Text("×")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.textSecondary)
@@ -71,9 +71,17 @@ struct SpeedControl: View {
                 .padding(.horizontal, 8)
                 .background(Theme.surface(8))
 
-                Button("Apply", action: applyCustom)
+                Button("Apply") { applyCustom() }
                     .buttonStyle(PrimaryButtonStyle())
                     .controlSize(.small)
+            }
+
+            if !applyToAll {
+                Button { applyCustom(all: true) } label: {
+                    Text("Apply to all clips")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(GhostButtonStyle())
             }
 
             Text("Type any speed — \(trimmed(EditorViewModel.minSpeed))× or faster")
@@ -107,10 +115,10 @@ struct SpeedControl: View {
         .hoverHighlight()
     }
 
-    private func applyCustom() {
+    private func applyCustom(all: Bool = false) {
         let normalized = customText.replacingOccurrences(of: ",", with: ".")
         guard let value = Double(normalized) else { return }
-        vm.setSpeed(value, all: applyToAll)
+        vm.setSpeed(value, all: all || applyToAll)
         showPopover = false
     }
 
