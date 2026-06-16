@@ -1,38 +1,74 @@
 # Reel
 
-A small, focused macOS video editor built with SwiftUI + AVFoundation:
+**A simple, native video editor for macOS.**
 
-1. **Load** a MOV / MP4 file (open dialog or drag-and-drop).
-2. **Import & append** more videos at the end of the timeline — clips of different
-   sizes/orientations are aspect-fit into a common frame.
-3. **Split & trim** — move the playhead and press **Split** to cut the video into
-   chunks; **Delete** a selected chunk, or **Delete Before / After** the playhead
-   to trim away the start or end of the current clip.
-4. **Reorder** — select a clip and move it earlier/later with the ← / → buttons.
-5. **Re-time** — change the playback **speed** of selected chunks (or all of them),
-   using presets or any custom value you type in.
-6. **Remove audio** with a one-click toggle.
-7. **Undo / Redo** every edit.
-8. **Preview** with the play button and by scrubbing the slider / dragging the
-   timeline playhead. **Zoom** the timeline in/out or **Fit** it to the window.
-9. **Export** the result as an **MP4**.
+![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-blue)
+![Built with](https://img.shields.io/badge/built%20with-SwiftUI%20%2B%20AVFoundation-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+I just wanted a dead-simple way to trim, cut and speed up screen recordings on my
+Mac — without launching a heavyweight timeline editor, learning a new tool, or
+paying a subscription. So I built **Reel**: a small, fast, fully native app that
+does the handful of things I actually need and nothing else.
+
+![Reel editing a screen recording](screenshot.png)
+
+## What it does
+
+- **Open** a MOV / MP4 (file dialog or just drag-and-drop).
+- **Append** more clips at the end — different sizes/orientations are aspect-fit
+  into a common frame automatically.
+- **Split & trim** — drop the playhead and hit **Split**, **Delete** a chunk, or
+  trim the start/end with **Delete Before / After**.
+- **Reorder** clips earlier/later.
+- **Re-time** — change the playback **speed** of selected clips (or all of them),
+  from presets or any custom value you type.
+- **Remove audio** with one click.
+- **Undo / Redo** every edit.
+- **Preview & scrub** with a zoomable timeline — what you preview is exactly what
+  you export.
+- **Export** to **MP4**.
+
+That's the whole app. No accounts, no cloud, no watermark.
+
+## Download
+
+Grab the latest **`Reel.zip`** from the
+[Releases](https://github.com/LorenzGit/video-edit/releases/latest) page — no
+Xcode needed. Unzip it and drag **Reel.app** into your Applications folder.
+
+Reel is a free build that isn't signed through Apple's paid Developer Program, so
+the first time you open it macOS will say it can't verify the app. That's normal
+for indie apps shared this way — the entire source is right here if you'd rather
+build it yourself. To open it the first time:
+
+1. Double-click **Reel.app** (macOS blocks it on the first try).
+2. Go to **System Settings → Privacy & Security**, scroll down, and click
+   **Open Anyway** next to the note about Reel.
+3. Confirm once more. macOS remembers your choice from then on.
+
+Prefer the terminal? One line clears the quarantine flag:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Reel.app
+```
 
 ## Requirements
 
 - macOS 14.0 or later
-- Xcode 16+ (built and tested with Xcode 26.5)
+- Xcode 16 or later (built and tested with Xcode 26.5)
 
-## Open & run
+## Build & run
 
 The Xcode project is generated with [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-from `project.yml`, and is already generated for you:
+from `project.yml`, and is already checked in, so you can open it directly:
 
 ```sh
 open Reel.xcodeproj
 ```
 
 Then press **⌘R** in Xcode to build and run. (The first run signs the app to run
-locally with your developer identity.)
+locally with your own developer identity.)
 
 If you change `project.yml` or add/remove source files, regenerate the project:
 
@@ -40,38 +76,46 @@ If you change `project.yml` or add/remove source files, regenerate the project:
 xcodegen generate
 ```
 
-The bundle identifier is a neutral placeholder (`com.example.reel`); change
-`bundleIdPrefix` / `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml` to your own before
-distributing.
+The app's bundle identifier is `com.gamojo.reel`. If you fork Reel and ship your
+own build, change `bundleIdPrefix` / `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`
+to your own.
+
+To produce a distributable build yourself — an ad-hoc–signed `.app`, zipped and
+ready for a GitHub Release, no Apple account required — run:
+
+```sh
+./scripts/build-release.sh   # writes dist/Reel.zip
+```
 
 ## Keyboard shortcuts
 
-| Action                   | Shortcut    |
-|--------------------------|-------------|
-| Open video               | ⌘O          |
-| Import video at end      | ⌘I          |
-| Export as MP4            | ⌘E          |
-| Play / Pause             | Space       |
-| Split at playhead        | ⌘B          |
-| Move clip earlier / later| ⌥⌘← / ⌥⌘→   |
-| Delete before playhead   | ⌘[          |
-| Delete after playhead    | ⌘]          |
-| Delete selected clip     | ⌫           |
-| Remove / restore audio   | ⌘M          |
-| Zoom in / out / fit      | ⌘+ / ⌘- / ⌘0|
-| Undo / Redo              | ⌘Z / ⇧⌘Z    |
+| Action                    | Shortcut     |
+|---------------------------|--------------|
+| Open video                | ⌘O           |
+| Import video at end       | ⌘I           |
+| Export as MP4             | ⌘E           |
+| Play / Pause              | Space        |
+| Split at playhead         | ⌘B           |
+| Move clip earlier / later | ⌥⌘← / ⌥⌘→    |
+| Delete before playhead    | ⌘[           |
+| Delete after playhead     | ⌘]           |
+| Delete selected clip      | ⌫            |
+| Remove / restore audio    | ⌘M           |
+| Zoom in / out / fit       | ⌘+ / ⌘- / ⌘0 |
+| Undo / Redo               | ⌘Z / ⇧⌘Z     |
 
 ## How it works
 
-The whole timeline is just an ordered list of `Chunk`s (`Sources/Models/Chunk.swift`),
-each holding a `sourceID`, a source time range, and a speed multiplier. Every edit
-takes a snapshot of that list for undo/redo, then rebuilds an `AVMutableComposition`
-(`Sources/ViewModels/EditorViewModel.swift`): each chunk's range is appended in
-order from its source video and `scaleTimeRange` applies its speed. A matching
-`AVVideoComposition` places every source — whatever its size or orientation — into a
-common frame (the first clip's), aspect-fit and centred. That composition feeds both
-the live `AVPlayer` preview and the `AVAssetExportSession` MP4 export, so what you
-preview is exactly what you export.
+The whole timeline is just an ordered list of `Chunk`s
+([`Sources/Models/Chunk.swift`](Sources/Models/Chunk.swift)), each holding a
+`sourceID`, a source time range, and a speed multiplier. Every edit takes a
+snapshot of that list for undo/redo, then rebuilds an `AVMutableComposition`
+([`Sources/ViewModels/EditorViewModel.swift`](Sources/ViewModels/EditorViewModel.swift)):
+each chunk's range is appended in order from its source video, and `scaleTimeRange`
+applies its speed. A matching `AVVideoComposition` places every source — whatever
+its size or orientation — into a common frame (the first clip's), aspect-fit and
+centred. That one composition feeds both the live `AVPlayer` preview and the
+`AVAssetExportSession` MP4 export, so what you preview is exactly what you export.
 
 ## Project layout
 
@@ -80,10 +124,15 @@ Sources/
   App/         ReelApp.swift, AppCommands.swift   (entry point + menu shortcuts)
   Models/      Chunk.swift                          (timeline data model)
   ViewModels/  EditorViewModel.swift                (player, edits, undo, export)
-  Views/       ContentView, HeaderBar, PreviewSection, TransportBar, ControlBar,
-               SpeedControl, TimelineView, EmptyStateView, ExportOverlay, StatusToast
+  Views/       ContentView, PreviewSection, TransportBar, ControlBar, SpeedControl,
+               TimelineView, EmptyStateView, ExportOverlay, StatusToast
   Support/     Theme.swift, Formatting.swift        (styling + helpers)
 ```
 
 The timeline is horizontally scrollable and zoomable; removing audio drops the
 audio track from the composition entirely (affecting both preview and export).
+
+## License
+
+[MIT](LICENSE) — do whatever you like with it. If you build something fun on top,
+I'd love to hear about it.

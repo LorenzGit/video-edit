@@ -1,6 +1,6 @@
 name: Reel
 options:
-  bundleIdPrefix: com.example
+  bundleIdPrefix: com.gamojo
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
@@ -22,7 +22,7 @@ targets:
         LSApplicationCategoryType: public.app-category.video
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.example.reel
+        PRODUCT_BUNDLE_IDENTIFIER: com.gamojo.reel
         PRODUCT_NAME: Reel
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"

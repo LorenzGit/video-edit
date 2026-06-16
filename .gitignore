@@ -33,3 +33,7 @@ DerivedData/
 *.mp4
 *.mov
 *.m4v
+
+# Release artifacts (produced by scripts/build-release.sh)
+dist/
+*.zip
