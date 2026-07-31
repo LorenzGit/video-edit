@@ -1,26 +1,61 @@
 import SwiftUI
 
-/// The single control bar under the transport slider. Holds the file actions
-/// (filename / Open / Export), the editing tools, and the timeline meta
-/// (clip count + zoom) — everything that used to live in the top header and the
-/// timeline header, freeing vertical space for the video.
+/// The icon-only control bar under the transport slider. At narrower window
+/// widths the actions wrap into two edge-aligned rows.
 struct ControlBar: View {
     @EnvironmentObject var vm: EditorViewModel
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            wideLayout
+                .frame(minWidth: 850, maxWidth: .infinity, alignment: .leading)
+            stackedLayout
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 8)
+    }
+
+    private var wideLayout: some View {
         HStack(spacing: 8) {
             fileGroup
 
             divider
 
-            // Editing tools
+            editingGroup
+
+            Spacer(minLength: 8)
+
+            viewGroup
+        }
+    }
+
+    private var stackedLayout: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                fileGroup
+                Spacer(minLength: 8)
+            }
+
+            HStack(spacing: 8) {
+                editingGroup
+                Spacer(minLength: 8)
+                viewGroup
+            }
+        }
+    }
+
+    // MARK: Editing tools
+
+    private var editingGroup: some View {
+        HStack(spacing: 8) {
             Button { vm.splitAtPlayhead() } label: {
-                Label("Split", systemImage: "scissors")
+                Image(systemName: "scissors")
             }
             .buttonStyle(ToolButtonStyle())
             .disabled(!vm.hasContent)
             .help("Split the clip at the playhead (⌘B)")
             .hoverHighlight()
+            .accessibilityLabel("Split")
 
             Button { vm.deleteBeforePlayhead() } label: {
                 Image(systemName: "delete.left")
@@ -29,6 +64,7 @@ struct ControlBar: View {
             .disabled(!vm.hasContent)
             .help("Delete everything before the playhead in this clip (⌘[)")
             .hoverHighlight()
+            .accessibilityLabel("Delete before playhead")
 
             Button { vm.deleteAfterPlayhead() } label: {
                 Image(systemName: "delete.right")
@@ -37,6 +73,7 @@ struct ControlBar: View {
             .disabled(!vm.hasContent)
             .help("Delete everything after the playhead in this clip (⌘])")
             .hoverHighlight()
+            .accessibilityLabel("Delete after playhead")
 
             Button { vm.deleteSelected() } label: {
                 Image(systemName: "trash")
@@ -45,10 +82,10 @@ struct ControlBar: View {
             .disabled(vm.selection.isEmpty)
             .help("Delete the selected clip (⌫)")
             .hoverHighlight()
+            .accessibilityLabel("Delete selected clip")
 
             divider
 
-            // Reorder the selected clip
             Button { vm.moveSelected(by: -1) } label: {
                 Image(systemName: "arrow.left")
             }
@@ -56,6 +93,7 @@ struct ControlBar: View {
             .disabled(!vm.canMoveBackward)
             .help("Move clip earlier (⌥⌘←)")
             .hoverHighlight()
+            .accessibilityLabel("Move clip earlier")
 
             Button { vm.moveSelected(by: 1) } label: {
                 Image(systemName: "arrow.right")
@@ -64,6 +102,7 @@ struct ControlBar: View {
             .disabled(!vm.canMoveForward)
             .help("Move clip later (⌥⌘→)")
             .hoverHighlight()
+            .accessibilityLabel("Move clip later")
 
             divider
 
@@ -76,24 +115,39 @@ struct ControlBar: View {
             .disabled(!vm.hasContent || !vm.hasAudio)
             .help(muteHelp)
             .hoverHighlight()
-
-            Spacer(minLength: 8)
-
-            viewGroup
+            .accessibilityLabel(vm.muteAudio ? "Restore audio" : "Remove audio")
         }
-        .padding(.horizontal, 18)
-        .frame(height: 50)
     }
 
-    // MARK: File actions + name
+    // MARK: File actions
 
     private var fileGroup: some View {
         HStack(spacing: 8) {
+            Button {
+                if vm.isRecording {
+                    vm.stopScreenRecording()
+                } else {
+                    vm.beginScreenRecording()
+                }
+            } label: {
+                Image(systemName: vm.isRecording ? "stop.fill" : "record.circle")
+            }
+            .buttonStyle(RecordButtonStyle(isRecording: vm.isRecording))
+            .disabled(vm.isFinishingRecording || (!vm.isRecording && vm.recordingActionDisabled))
+            .help(
+                vm.isRecording
+                    ? "Stop screen recording (⌘Esc or ⇧⌘R)"
+                    : "Record a screen region (⇧⌘R)"
+            )
+            .accessibilityLabel(recordButtonTitle)
+
             Button { vm.openPanel() } label: {
-                Label("Open", systemImage: "folder")
+                Image(systemName: "folder")
             }
             .buttonStyle(GhostButtonStyle())
+            .help("Open video (⌘O)")
             .hoverHighlight()
+            .accessibilityLabel("Open video")
 
             Button { vm.importPanel() } label: {
                 Image(systemName: "plus.rectangle.on.rectangle")
@@ -102,57 +156,52 @@ struct ControlBar: View {
             .disabled(!vm.hasContent)
             .help("Append another video to the end (⌘I)")
             .hoverHighlight()
+            .accessibilityLabel("Append video")
 
             Button { vm.export() } label: {
-                Label("Export", systemImage: "square.and.arrow.up")
+                Image(systemName: "square.and.arrow.up")
             }
             .buttonStyle(PrimaryButtonStyle())
-            .disabled(!vm.hasContent)
+            .disabled(!vm.hasContent || vm.isRecording || vm.isFinishingRecording || vm.isExporting)
             .opacity(vm.hasContent ? 1 : 0.5)
+            .help("Export as MP4 (⌘E)")
             .hoverHighlight()
+            .accessibilityLabel("Export")
 
-            if !vm.displayName.isEmpty {
-                Text(vm.displayName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: 170)
-                    .layoutPriority(-1)
+            Button { vm.copyVideo() } label: {
+                Image(systemName: "doc.on.clipboard")
             }
+            .buttonStyle(GhostButtonStyle())
+            .disabled(!vm.hasContent || vm.isRecording || vm.isFinishingRecording || vm.isExporting)
+            .opacity(vm.hasContent ? 1 : 0.5)
+            .help("Copy the edited video to the clipboard (⇧⌘C)")
+            .hoverHighlight()
+            .accessibilityLabel("Copy video")
         }
     }
 
-    // MARK: Clip count + zoom + history
+    // MARK: Zoom + history
 
     private var viewGroup: some View {
         HStack(spacing: 8) {
-            if vm.hasContent {
-                Text("\(vm.chunks.count) clip\(vm.chunks.count == 1 ? "" : "s")")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.textTertiary)
-                    .fixedSize()
-            }
-
             HStack(spacing: 2) {
                 Button { vm.zoomOut() } label: { Image(systemName: "minus.magnifyingglass") }
                     .buttonStyle(IconButtonStyle())
                     .help("Zoom out (⌘-)")
                     .hoverHighlight()
+                    .accessibilityLabel("Zoom out")
                 Button { vm.zoomToFit() } label: {
-                    Text("Fit")
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(height: 30)
-                        .padding(.horizontal, 8)
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(vm.isFitZoom ? Theme.accent : Theme.textSecondary)
+                .buttonStyle(IconButtonStyle(active: vm.isFitZoom))
                 .help("Fit timeline to window (⌘0)")
                 .hoverHighlight()
+                .accessibilityLabel("Fit timeline to window")
                 Button { vm.zoomIn() } label: { Image(systemName: "plus.magnifyingglass") }
                     .buttonStyle(IconButtonStyle())
                     .help("Zoom in (⌘+)")
                     .hoverHighlight()
+                    .accessibilityLabel("Zoom in")
             }
             .disabled(!vm.hasContent)
             .opacity(vm.hasContent ? 1 : 0.4)
@@ -164,11 +213,13 @@ struct ControlBar: View {
                 .disabled(!vm.canUndo)
                 .help("Undo (⌘Z)")
                 .hoverHighlight()
+                .accessibilityLabel("Undo")
             Button { vm.redo() } label: { Image(systemName: "arrow.uturn.forward") }
                 .buttonStyle(IconButtonStyle())
                 .disabled(!vm.canRedo)
                 .help("Redo (⇧⌘Z)")
                 .hoverHighlight()
+                .accessibilityLabel("Redo")
         }
     }
 
@@ -182,5 +233,15 @@ struct ControlBar: View {
     private var muteHelp: String {
         if !vm.hasAudio { return "This video has no audio track" }
         return vm.muteAudio ? "Audio removed — click to restore (⌘M)" : "Remove audio (⌘M)"
+    }
+
+    private var recordButtonTitle: String {
+        if vm.isFinishingRecording { return "Finishing…" }
+        if vm.isRecording {
+            let seconds = max(0, Int(vm.recordingElapsed))
+            return String(format: "Stop %02d:%02d", seconds / 60, seconds % 60)
+        }
+        if vm.isPreparingRecording { return "Preparing…" }
+        return "Record"
     }
 }

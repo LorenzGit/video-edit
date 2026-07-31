@@ -15,6 +15,8 @@ does the handful of things I actually need and nothing else.
 
 ## What it does
 
+- **Record** any resizable portion of any connected display, with optional
+  speaker/system audio.
 - **Open** a MOV / MP4 (file dialog or just drag-and-drop).
 - **Append** more clips at the end — different sizes/orientations are aspect-fit
   into a common frame automatically.
@@ -27,9 +29,31 @@ does the handful of things I actually need and nothing else.
 - **Undo / Redo** every edit.
 - **Preview & scrub** with a zoomable timeline — what you preview is exactly what
   you export.
-- **Export** to **MP4**.
+- **Export** to **MP4**, or **Copy** the edited video directly to the clipboard.
 
 That's the whole app. No accounts, no cloud, no watermark.
+
+## Record a screen region
+
+1. Click **Record** (or press **⇧⌘R**).
+2. On any connected display, drag to draw a new region, drag inside the dotted
+   border to move it, or use the eight handles to resize it exactly.
+3. Leave **Speaker audio** checked to include the sound playing through macOS,
+   or turn it off for a silent recording.
+4. Click **Record** in the floating selection controls.
+5. Click the red dot in the macOS menu bar and choose **Stop Recording**, or
+   press **⌘Esc** when you are done.
+
+Recordings are saved as MOV files in `~/Movies/Reel` and open in Reel
+automatically, ready to trim or export. If a video is already open, the new
+recording is appended to the end of its timeline instead. Reel's own windows and
+sounds are excluded from the capture.
+
+The first time you record, macOS asks for Screen & System Audio Recording
+permission. If permission still needs to be enabled, Reel opens **System
+Settings → Privacy & Security → Screen & System Audio Recording** directly;
+enable Reel there, then relaunch the app. If Reel is not yet listed, click
+**Add** and select the copy of `Reel.app` you are running.
 
 ## Download
 
@@ -80,12 +104,16 @@ The app's bundle identifier is `com.gamojo.reel`. If you fork Reel and ship your
 own build, change `bundleIdPrefix` / `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`
 to your own.
 
-To produce a distributable build yourself — an ad-hoc–signed `.app`, zipped and
-ready for a GitHub Release, no Apple account required — run:
+To produce a distributable build yourself — certificate-signed when an Apple
+Development identity is available, otherwise ad-hoc signed — run:
 
 ```sh
 ./scripts/build-release.sh   # writes dist/Reel.zip
 ```
+
+The release script embeds a stable local signing requirement so macOS keeps the
+Screen Recording permission associated with Reel across subsequent local
+rebuilds.
 
 ## Keyboard shortcuts
 
@@ -93,7 +121,10 @@ ready for a GitHub Release, no Apple account required — run:
 |---------------------------|--------------|
 | Open video                | ⌘O           |
 | Import video at end       | ⌘I           |
+| Record / stop screen      | ⇧⌘R          |
+| Stop screen recording     | ⌘Esc         |
 | Export as MP4             | ⌘E           |
+| Copy video to clipboard   | ⇧⌘C          |
 | Play / Pause              | Space        |
 | Split at playhead         | ⌘B           |
 | Move clip earlier / later | ⌥⌘← / ⌥⌘→    |
@@ -130,7 +161,11 @@ Sources/
 ```
 
 The timeline is horizontally scrollable and zoomable; removing audio drops the
-audio track from the composition entirely (affecting both preview and export).
+audio track from the composition entirely (affecting preview, export, and
+clipboard copies).
+Screen recording uses ScreenCaptureKit for an exact display-relative region and
+AVAssetWriter for the MOV file, including an AAC system-audio track only when
+requested.
 
 ## License
 

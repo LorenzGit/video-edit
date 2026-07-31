@@ -32,7 +32,7 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
-        .frame(minWidth: 1060, minHeight: 600)
+        .frame(minWidth: 720, minHeight: 600)
         .preferredColorScheme(.dark)
         .overlay(alignment: .bottom) {
             if let message = vm.statusMessage, vm.sourceURL != nil, !vm.isExporting {

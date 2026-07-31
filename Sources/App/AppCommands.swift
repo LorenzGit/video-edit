@@ -13,9 +13,22 @@ struct AppCommands: Commands {
             Button("Import Video at End…") { vm.importPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(!vm.hasContent)
+            Button(vm.isRecording ? "Stop Screen Recording" : "Record Screen Region…") {
+                if vm.isRecording { vm.stopScreenRecording() }
+                else { vm.beginScreenRecording() }
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(vm.isFinishingRecording || (!vm.isRecording && vm.recordingActionDisabled))
+            Button("Stop Screen Recording") { vm.stopScreenRecording() }
+                .keyboardShortcut(.escape, modifiers: .command)
+                .disabled(!vm.isRecording || vm.isFinishingRecording)
+            Divider()
             Button("Export as MP4…") { vm.export() }
                 .keyboardShortcut("e", modifiers: .command)
-                .disabled(!vm.hasContent)
+                .disabled(!vm.hasContent || vm.isRecording || vm.isFinishingRecording || vm.isExporting)
+            Button("Copy Video to Clipboard") { vm.copyVideo() }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(!vm.hasContent || vm.isRecording || vm.isFinishingRecording || vm.isExporting)
         }
 
         // Edit

@@ -8,11 +8,11 @@ struct ExportOverlay: View {
             Color.black.opacity(0.55).ignoresSafeArea()
 
             VStack(spacing: 18) {
-                Image(systemName: "square.and.arrow.up")
+                Image(systemName: vm.exportProgressIcon)
                     .font(.system(size: 28, weight: .medium))
                     .foregroundStyle(Theme.accent)
 
-                Text("Exporting MP4")
+                Text(vm.exportProgressTitle)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
 

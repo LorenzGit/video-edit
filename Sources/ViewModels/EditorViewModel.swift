@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import AppKit
+import ScreenCaptureKit
 import UniformTypeIdentifiers
 
 /// Owns all editing state: the loaded source videos, the list of chunks, the
@@ -100,9 +101,32 @@ final class EditorViewModel: ObservableObject {
 
     @Published var isExporting = false
     @Published var exportProgress: Double = 0
+    @Published private(set) var exportProgressTitle = "Exporting MP4"
+    @Published private(set) var exportProgressIcon = "square.and.arrow.up"
     @Published var statusMessage: String?
+    private var clipboardVideoURL: URL?
 
     private let timescale: CMTimeScale = 600
+
+    // MARK: Screen recording
+
+    @Published private(set) var isPreparingRecording = false
+    @Published private(set) var isSelectingCaptureRegion = false
+    @Published private(set) var isRecording = false
+    @Published private(set) var isFinishingRecording = false
+    @Published private(set) var recordingElapsed: TimeInterval = 0
+    @Published var recordsSystemAudio = true
+
+    private var captureSelectionCoordinator: CaptureSelectionCoordinator?
+    private var screenRecorder: ScreenRecorder?
+    private var recordingStatusItem: RecordingStatusItemController?
+    private var recordingTimer: Task<Void, Never>?
+    private var stopRecordingHotKey: GlobalHotKey?
+    private var concealedWindows: [NSWindow] = []
+
+    var recordingActionDisabled: Bool {
+        isPreparingRecording || isSelectingCaptureRegion || isFinishingRecording
+    }
 
     // MARK: Lifecycle
 
@@ -125,9 +149,190 @@ final class EditorViewModel: ObservableObject {
     deinit {
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        recordingTimer?.cancel()
     }
 
     // MARK: Loading & importing
+
+    func beginScreenRecording() {
+        guard !isRecording, !recordingActionDisabled, !isExporting else { return }
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+        }
+
+        statusMessage = nil
+        isPreparingRecording = true
+        Task {
+            if !CGPreflightScreenCaptureAccess() {
+                _ = CGRequestScreenCaptureAccess()
+            }
+
+            do {
+                // Fetch shareable content before placing selection overlays so
+                // we only offer displays ScreenCaptureKit can actually capture.
+                let content = try await SCShareableContent.excludingDesktopWindows(
+                    false,
+                    onScreenWindowsOnly: true
+                )
+                let displayIDs = Set(content.displays.map(\.displayID))
+                concealReelWindowsForCapture()
+                isPreparingRecording = false
+                isSelectingCaptureRegion = true
+
+                let coordinator = CaptureSelectionCoordinator(
+                    includeSystemAudio: recordsSystemAudio
+                )
+                captureSelectionCoordinator = coordinator
+                coordinator.present(availableDisplayIDs: displayIDs) { [weak self] selection in
+                    guard let self else { return }
+                    self.captureSelectionCoordinator = nil
+                    self.isSelectingCaptureRegion = false
+                    guard let selection else {
+                        self.revealReelWindowsAfterCapture()
+                        return
+                    }
+                    self.recordsSystemAudio = selection.includeSystemAudio
+                    self.startScreenRecording(selection)
+                }
+            } catch {
+                isPreparingRecording = false
+                revealReelWindowsAfterCapture()
+                handleScreenCaptureError(error)
+            }
+        }
+    }
+
+    func stopScreenRecording() {
+        guard isRecording, !isFinishingRecording, let recorder = screenRecorder else { return }
+        let shouldAppendRecording = hasContent
+        isFinishingRecording = true
+        recordingTimer?.cancel()
+        recordingTimer = nil
+        recordingStatusItem?.setFinishing()
+
+        Task {
+            do {
+                let url = try await recorder.stop()
+                finishRecordingUI()
+                if shouldAppendRecording {
+                    if await appendImport(url: url) {
+                        statusMessage = "Recording saved to Movies/Reel and appended to the timeline."
+                    }
+                } else if await loadFresh(url: url) {
+                    statusMessage = "Recording saved to Movies/Reel and opened for editing."
+                }
+            } catch {
+                finishRecordingUI()
+                statusMessage = "Couldn't finish recording: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func startScreenRecording(_ selection: ScreenCaptureSelection) {
+        isPreparingRecording = true
+        Task {
+            // Let the border and control panels leave the window server before
+            // capture begins. Reel is also excluded from the stream itself.
+            try? await Task.sleep(nanoseconds: 120_000_000)
+
+            let recorder = ScreenRecorder()
+            recorder.unexpectedStopHandler = { [weak self, weak recorder] error in
+                Task { @MainActor in
+                    recorder?.cancel()
+                    self?.finishRecordingUI()
+                    self?.statusMessage = "Screen recording stopped: \(error.localizedDescription)"
+                }
+            }
+            screenRecorder = recorder
+
+            do {
+                _ = try await recorder.start(
+                    selection: selection,
+                    includeSystemAudio: selection.includeSystemAudio
+                )
+                isPreparingRecording = false
+                isRecording = true
+                recordingElapsed = 0
+                stopRecordingHotKey = GlobalHotKey(commandEscapeAction: { [weak self] in
+                    self?.stopScreenRecording()
+                })
+
+                recordingStatusItem = RecordingStatusItemController { [weak self] in
+                    self?.stopScreenRecording()
+                }
+
+                let startedAt = Date()
+                recordingTimer = Task { [weak self] in
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        guard let self, !Task.isCancelled else { return }
+                        self.recordingElapsed = Date().timeIntervalSince(startedAt)
+                        self.recordingStatusItem?.update(elapsed: self.recordingElapsed)
+                    }
+                }
+            } catch {
+                recorder.cancel()
+                finishRecordingUI()
+                handleScreenCaptureError(error)
+            }
+        }
+    }
+
+    private func finishRecordingUI() {
+        recordingTimer?.cancel()
+        recordingTimer = nil
+        stopRecordingHotKey = nil
+        recordingStatusItem?.close()
+        recordingStatusItem = nil
+        screenRecorder = nil
+        isPreparingRecording = false
+        isRecording = false
+        isFinishingRecording = false
+        recordingElapsed = 0
+        revealReelWindowsAfterCapture()
+    }
+
+    private func concealReelWindowsForCapture() {
+        guard concealedWindows.isEmpty else { return }
+        concealedWindows = NSApp.windows.filter { window in
+            window.isVisible && !(window is NSPanel)
+        }
+        concealedWindows.forEach { $0.orderOut(nil) }
+    }
+
+    private func revealReelWindowsAfterCapture() {
+        guard !concealedWindows.isEmpty else { return }
+        let windows = concealedWindows
+        concealedWindows.removeAll()
+        windows.dropFirst().forEach { $0.orderFront(nil) }
+        windows.first?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func handleScreenCaptureError(_ error: Error) {
+        if !CGPreflightScreenCaptureAccess() {
+            statusMessage = nil
+            openScreenRecordingSettings()
+            return
+        }
+        statusMessage = "Couldn't start screen recording: \(error.localizedDescription)"
+    }
+
+    private func openScreenRecordingSettings() {
+        let workspace = NSWorkspace.shared
+        let deepLink = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+        )
+        if let deepLink, workspace.open(deepLink) {
+            return
+        }
+
+        // Fall back to opening System Settings itself if Apple changes the
+        // privacy-pane deep link on a future macOS release.
+        let settingsApp = URL(fileURLWithPath: "/System/Applications/System Settings.app")
+        workspace.open(settingsApp)
+    }
 
     func openPanel() {
         if let url = pickVideo(title: "Open Video") { openVideo(url: url) }
@@ -169,13 +374,14 @@ final class EditorViewModel: ObservableObject {
         )
     }
 
-    private func loadFresh(url: URL) async {
+    @discardableResult
+    private func loadFresh(url: URL) async -> Bool {
         statusMessage = nil
         muteAudio = false
         do {
             guard let source = try await makeSource(url: url) else {
                 statusMessage = "That file has no video track."
-                return
+                return false
             }
             sources = [source.id: source]
             hasAudio = source.audioTrack != nil
@@ -189,16 +395,19 @@ final class EditorViewModel: ObservableObject {
             thumbnails = [:]
             rebuild(seekTo: 0)
             generateThumbnails(for: source)
+            return true
         } catch {
             statusMessage = "Couldn't load video: \(error.localizedDescription)"
+            return false
         }
     }
 
-    private func appendImport(url: URL) async {
+    @discardableResult
+    private func appendImport(url: URL) async -> Bool {
         do {
             guard let source = try await makeSource(url: url) else {
                 statusMessage = "That file has no video track."
-                return
+                return false
             }
             sources[source.id] = source
             hasAudio = hasAudio || source.audioTrack != nil
@@ -209,8 +418,10 @@ final class EditorViewModel: ObservableObject {
             }
             generateThumbnails(for: source)
             statusMessage = "Appended \(url.lastPathComponent)"
+            return true
         } catch {
             statusMessage = "Couldn't import video: \(error.localizedDescription)"
+            return false
         }
     }
 
@@ -546,13 +757,26 @@ final class EditorViewModel: ObservableObject {
 
     func export() {
         guard hasContent else { statusMessage = "Nothing to export."; return }
+        guard !isExporting else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.mpeg4Movie]
         panel.nameFieldStringValue = defaultExportName()
         panel.canCreateDirectories = true
         panel.title = "Export Video"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await runExport(to: url) }
+        Task { await runExport(to: url, destination: .file) }
+    }
+
+    func copyVideo() {
+        guard hasContent else { statusMessage = "Nothing to copy."; return }
+        guard !isExporting else { return }
+
+        do {
+            let url = try makeClipboardExportURL()
+            Task { await runExport(to: url, destination: .clipboard) }
+        } catch {
+            statusMessage = "Couldn't prepare the clipboard copy: \(error.localizedDescription)"
+        }
     }
 
     private func defaultExportName() -> String {
@@ -561,15 +785,22 @@ final class EditorViewModel: ObservableObject {
         return "\(trimmed.isEmpty ? "Untitled" : trimmed)-edited.mp4"
     }
 
-    private func runExport(to url: URL) async {
+    private enum ExportDestination {
+        case file
+        case clipboard
+    }
+
+    private func runExport(to url: URL, destination: ExportDestination) async {
         guard let built = buildComposition() else {
             statusMessage = "Couldn't prepare the export."
+            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
             return
         }
         guard let session = AVAssetExportSession(
             asset: built.composition, presetName: AVAssetExportPresetHighestQuality
         ) else {
             statusMessage = "Export isn't supported for this video."
+            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
             return
         }
 
@@ -580,6 +811,14 @@ final class EditorViewModel: ObservableObject {
         session.audioTimePitchAlgorithm = .spectral
 
         if isPlaying { player.pause(); isPlaying = false }
+        switch destination {
+        case .file:
+            exportProgressTitle = "Exporting MP4"
+            exportProgressIcon = "square.and.arrow.up"
+        case .clipboard:
+            exportProgressTitle = "Copying Video"
+            exportProgressIcon = "doc.on.clipboard"
+        }
         isExporting = true
         exportProgress = 0
         statusMessage = nil
@@ -603,14 +842,64 @@ final class EditorViewModel: ObservableObject {
         switch session.status {
         case .completed:
             exportProgress = 1
-            statusMessage = "Exported \(url.lastPathComponent)"
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            switch destination {
+            case .file:
+                statusMessage = "Exported \(url.lastPathComponent)"
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            case .clipboard:
+                if putVideoOnClipboard(url) {
+                    statusMessage = "Copied video to the clipboard."
+                } else {
+                    discardClipboardStagingFile(at: url)
+                    statusMessage = "Couldn't place the video on the clipboard."
+                }
+            }
         case .failed:
+            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
             statusMessage = "Export failed: \(session.error?.localizedDescription ?? "unknown error")"
         case .cancelled:
+            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
             statusMessage = "Export cancelled."
         default:
+            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
             statusMessage = "Export ended unexpectedly."
         }
+    }
+
+    private func makeClipboardExportURL() throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Reel Clipboard", isDirectory: true)
+        let folder = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: folder,
+            withIntermediateDirectories: true
+        )
+        return folder.appendingPathComponent(defaultExportName())
+    }
+
+    private func putVideoOnClipboard(_ url: URL) -> Bool {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        guard pasteboard.writeObjects([url as NSURL]) else { return false }
+
+        let previousURL = clipboardVideoURL
+        clipboardVideoURL = url
+        if let previousURL, previousURL != url {
+            discardClipboardStagingFile(at: previousURL)
+        }
+        return true
+    }
+
+    private func discardClipboardStagingFileIfNeeded(
+        at url: URL,
+        destination: ExportDestination
+    ) {
+        if case .clipboard = destination {
+            discardClipboardStagingFile(at: url)
+        }
+    }
+
+    private func discardClipboardStagingFile(at url: URL) {
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 }

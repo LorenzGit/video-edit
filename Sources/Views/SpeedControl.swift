@@ -15,16 +15,12 @@ struct SpeedControl: View {
             customText = vm.activeSpeed.map { trimmed($0) } ?? ""
             showPopover.toggle()
         } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "gauge.with.dots.needle.67percent")
-                Text(buttonTitle)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
-                    .opacity(0.6)
-            }
+            Image(systemName: "gauge.with.dots.needle.67percent")
         }
         .buttonStyle(ToolButtonStyle(tint: Theme.speedTint))
         .disabled(!vm.hasContent)
+        .help("Change playback speed")
+        .accessibilityLabel(buttonTitle)
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {
             popoverBody
                 .frame(width: 248)

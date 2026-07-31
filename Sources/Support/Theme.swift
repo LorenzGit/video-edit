@@ -49,6 +49,35 @@ struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
+/// Red capture action used for both starting and stopping a screen recording.
+struct RecordButtonStyle: ButtonStyle {
+    var isRecording = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 15)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(
+                        Color.red.opacity(
+                            isEnabled ? (configuration.isPressed ? 0.72 : (isRecording ? 0.92 : 0.82)) : 0.35
+                        )
+                    )
+            )
+            .overlay {
+                if isRecording {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .stroke(Color.white.opacity(0.24), lineWidth: 1)
+                }
+            }
+            .contentShape(Rectangle())
+    }
+}
+
 /// Subtle bordered button for secondary actions.
 struct GhostButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

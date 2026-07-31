@@ -23,12 +23,25 @@ struct EmptyStateView: View {
                     .foregroundStyle(Theme.textSecondary)
             }
 
-            Button {
-                vm.openPanel()
-            } label: {
-                Label("Open Video", systemImage: "folder")
+            HStack(spacing: 10) {
+                Button {
+                    vm.beginScreenRecording()
+                } label: {
+                    Label(
+                        vm.isPreparingRecording ? "Preparing…" : "Record",
+                        systemImage: "record.circle"
+                    )
+                }
+                .buttonStyle(RecordButtonStyle())
+                .disabled(vm.recordingActionDisabled)
+
+                Button {
+                    vm.openPanel()
+                } label: {
+                    Label("Open Video", systemImage: "folder")
+                }
+                .buttonStyle(PrimaryButtonStyle())
             }
-            .buttonStyle(PrimaryButtonStyle())
 
             if let message = vm.statusMessage {
                 Text(message)

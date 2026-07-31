@@ -20,6 +20,7 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHighResolutionCapable: true
         LSApplicationCategoryType: public.app-category.video
+        NSScreenCaptureUsageDescription: Reel records the portion of the screen you select.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gamojo.reel
