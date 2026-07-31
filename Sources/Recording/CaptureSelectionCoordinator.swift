@@ -46,7 +46,10 @@ final class CaptureSelectionCoordinator: NSObject {
             view.selectionDelegate = self
 
             let panel = CaptureOverlayPanel(
-                contentRect: screen.frame,
+                // This initializer interprets the content origin relative to
+                // the supplied screen. Passing screen.frame here applies a
+                // secondary display's global origin twice.
+                contentRect: CGRect(origin: .zero, size: screen.frame.size),
                 styleMask: [.borderless],
                 backing: .buffered,
                 defer: false,
