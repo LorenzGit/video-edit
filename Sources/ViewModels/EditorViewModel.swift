@@ -633,6 +633,112 @@ final class EditorViewModel: ObservableObject {
         }
     }
 
+    // MARK: Non-destructive trimming
+
+    enum TrimEdge: Equatable {
+        case leading
+        case trailing
+    }
+
+    /// Pauses playback and selects the clip before a trim preview starts.
+    /// The actual chunk is left untouched until the gesture ends.
+    func beginTrimPreview(_ id: UUID) {
+        guard chunks.contains(where: { $0.id == id }) else { return }
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+        }
+        selection = [id]
+    }
+
+    /// Produces a clamped, non-mutating trim preview. Because every pointer event
+    /// is calculated from the same original chunk, reversing direction during a
+    /// drag is exact and cannot accumulate rounding error.
+    func trimPreview(
+        from original: Chunk,
+        edge: TrimEdge,
+        sourceDelta: Double
+    ) -> Chunk {
+        guard
+            chunks.contains(where: { $0.id == original.id }),
+            let source = sources[original.sourceID]
+        else { return original }
+
+        let minimumDuration = min(
+            source.duration,
+            max(0.02, 1 / max(Double(source.frameRate), 1))
+        )
+        var updated = original
+
+        switch edge {
+        case .leading:
+            updated.start = min(
+                max(0, original.start + sourceDelta),
+                original.end - minimumDuration
+            )
+        case .trailing:
+            updated.end = max(
+                original.start + minimumDuration,
+                min(source.duration, original.end + sourceDelta)
+            )
+        }
+
+        return updated
+    }
+
+    /// Applies the final preview once, creating one undo step and rebuilding the
+    /// player only after the pointer is released.
+    @discardableResult
+    func commitTrimPreview(_ preview: Chunk) -> Bool {
+        guard
+            let index = chunks.firstIndex(where: { $0.id == preview.id }),
+            chunks[index] != preview,
+            chunks[index].sourceID == preview.sourceID
+        else { return false }
+
+        commit {
+            chunks[index] = preview
+            selection = [preview.id]
+        }
+        return true
+    }
+
+    func canRestoreTrim(_ id: UUID, edge: TrimEdge) -> Bool {
+        recoverableTrimDuration(id, edge: edge) > 0.001
+    }
+
+    func recoverableTrimDuration(_ id: UUID, edge: TrimEdge) -> Double {
+        guard
+            let chunk = chunks.first(where: { $0.id == id }),
+            let source = sources[chunk.sourceID]
+        else { return 0 }
+        switch edge {
+        case .leading:
+            return max(0, chunk.start)
+        case .trailing:
+            return max(0, source.duration - chunk.end)
+        }
+    }
+
+    /// Restores one edge all the way to its original source boundary.
+    func restoreTrim(_ id: UUID, edge: TrimEdge) {
+        guard
+            let index = chunks.firstIndex(where: { $0.id == id }),
+            let source = sources[chunks[index].sourceID],
+            canRestoreTrim(id, edge: edge)
+        else { return }
+
+        commit {
+            switch edge {
+            case .leading:
+                chunks[index].start = 0
+            case .trailing:
+                chunks[index].end = source.duration
+            }
+            selection = [id]
+        }
+    }
+
     /// Applies a speed to the selected chunks, or to every chunk when `all`.
     func setSpeed(_ speed: Double, all: Bool = false) {
         guard speed.isFinite, speed > 0 else { return }
@@ -664,6 +770,31 @@ final class EditorViewModel: ObservableObject {
         let j = i + offset
         guard chunks.indices.contains(j) else { return }
         commit { chunks.swapAt(i, j) }
+    }
+
+    /// Reorders a clip relative to another clip. Used by timeline drag-and-drop;
+    /// the whole move is recorded as one undoable action.
+    @discardableResult
+    func moveChunk(_ id: UUID, relativeTo targetID: UUID, after: Bool) -> Bool {
+        guard
+            id != targetID,
+            let sourceIndex = chunks.firstIndex(where: { $0.id == id }),
+            let targetIndex = chunks.firstIndex(where: { $0.id == targetID })
+        else { return id == targetID }
+
+        var insertionIndex = targetIndex + (after ? 1 : 0)
+        if sourceIndex < insertionIndex { insertionIndex -= 1 }
+        guard insertionIndex != sourceIndex else {
+            selection = [id]
+            return true
+        }
+
+        commit {
+            let moved = chunks.remove(at: sourceIndex)
+            chunks.insert(moved, at: min(max(0, insertionIndex), chunks.count))
+            selection = [id]
+        }
+        return true
     }
 
     // MARK: Undo / redo

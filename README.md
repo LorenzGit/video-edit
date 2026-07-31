@@ -21,8 +21,11 @@ does the handful of things I actually need and nothing else.
 - **Append** more clips at the end — different sizes/orientations are aspect-fit
   into a common frame automatically.
 - **Split & trim** — drop the playhead and hit **Split**, **Delete** a chunk, or
-  trim the start/end with **Delete Before / After**.
-- **Reorder** clips earlier/later.
+  trim the start/end with **Delete Before / After**. Select a clip to reveal
+  green handles wherever source footage can be recovered; drag either direction
+  to extend or shorten that edge, or double-click it to restore the entire side.
+- **Reorder** clips by dragging them directly in the timeline — it autoscrolls
+  when you hold a clip near either edge — or use the earlier/later buttons.
 - **Re-time** — change the playback **speed** of selected clips (or all of them),
   from presets or any custom value you type.
 - **Remove audio** with one click.
