@@ -13,6 +13,20 @@ struct ScreenCaptureSelection {
 
 @MainActor
 final class CaptureSelectionCoordinator: NSObject {
+    private static let savedSelectionKey = "CaptureSelectionCoordinator.lastSelection"
+
+    private struct SavedSelection: Codable {
+        let displayIdentifier: String
+        let x: Double
+        let y: Double
+        let width: Double
+        let height: Double
+
+        var rect: CGRect {
+            CGRect(x: x, y: y, width: width, height: height)
+        }
+    }
+
     private var overlays: [CaptureOverlayPanel] = []
     private var activeView: CaptureSelectionView?
     private var controlsPanel: CaptureControlsPanel?
@@ -70,23 +84,19 @@ final class CaptureSelectionCoordinator: NSObject {
             overlays.append(panel)
         }
 
-        let mouseLocation = NSEvent.mouseLocation
-        let initial = overlays
-            .compactMap { $0.contentView as? CaptureSelectionView }
-            .first(where: { $0.screen.frame.contains(mouseLocation) })
-            ?? overlays.compactMap { $0.contentView as? CaptureSelectionView }.first
+        let views = overlays.compactMap { $0.contentView as? CaptureSelectionView }
+        let savedSelection = Self.loadSavedSelection()
+        let initial = savedSelection.flatMap { saved in
+            views.first {
+                Self.persistentIdentifier(for: $0.displayID) == saved.displayIdentifier
+            }
+        } ?? views.first
 
         if let initial {
             activate(initial)
-            let bounds = initial.bounds.insetBy(dx: 80, dy: 70)
-            let width = min(max(640, bounds.width * 0.72), bounds.width)
-            let height = min(max(360, bounds.height * 0.66), bounds.height)
-            initial.selectionRect = CGRect(
-                x: bounds.midX - width / 2,
-                y: bounds.midY - height / 2,
-                width: width,
-                height: height
-            ).integral
+            initial.selectionRect = savedSelection.map {
+                Self.fittedSelection($0.rect, within: initial.bounds)
+            } ?? Self.defaultSelection(within: initial.bounds)
             selectionDidChange(in: initial)
         }
 
@@ -98,6 +108,12 @@ final class CaptureSelectionCoordinator: NSObject {
                 return nil
             }
             if event.keyCode == 36 || event.keyCode == 76 {
+                // Return commits a focused dimension field. Outside a field it
+                // keeps its existing behavior of starting the recording.
+                if let fieldEditor = self.controlsPanel?.firstResponder as? NSTextView,
+                   fieldEditor.isFieldEditor {
+                    return event
+                }
                 self.confirm()
                 return nil
             }
@@ -111,11 +127,12 @@ final class CaptureSelectionCoordinator: NSObject {
     private func showControls() {
         let root = CaptureControlsView(
             model: controlsModel,
+            commitSize: { [weak self] in self?.applyTypedSize() },
             confirm: { [weak self] in self?.confirm() },
             cancel: { [weak self] in self?.cancel() }
         )
         let panel = CaptureControlsPanel(
-            contentRect: CGRect(x: 0, y: 0, width: 390, height: 64),
+            contentRect: CGRect(x: 0, y: 0, width: 420, height: 64),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -148,8 +165,34 @@ final class CaptureSelectionCoordinator: NSObject {
         guard view === activeView, let rect = view.selectionRect else { return }
         let pixelsWide = max(2, Int((rect.width * view.screen.backingScaleFactor).rounded()))
         let pixelsHigh = max(2, Int((rect.height * view.screen.backingScaleFactor).rounded()))
-        controlsModel.sizeText = "\(pixelsWide) × \(pixelsHigh)"
+        controlsModel.widthText = "\(pixelsWide)"
+        controlsModel.heightText = "\(pixelsHigh)"
         positionControls()
+    }
+
+    /// Applies the numeric pixel dimensions while keeping the selection
+    /// centered as closely as the active display allows.
+    private func applyTypedSize() {
+        guard let view = activeView, let current = view.selectionRect else { return }
+
+        let scale = max(1, view.screen.backingScaleFactor)
+        let currentWidth = max(2, Int((current.width * scale).rounded()))
+        let currentHeight = max(2, Int((current.height * scale).rounded()))
+        let pixelsWide = Int(controlsModel.widthText).map { max(1, $0) } ?? currentWidth
+        let pixelsHigh = Int(controlsModel.heightText).map { max(1, $0) } ?? currentHeight
+        let requested = CGRect(
+            x: current.midX - CGFloat(pixelsWide) / scale / 2,
+            y: current.midY - CGFloat(pixelsHigh) / scale / 2,
+            width: CGFloat(pixelsWide) / scale,
+            height: CGFloat(pixelsHigh) / scale
+        )
+
+        view.selectionRect = Self.pixelAlignedSelection(
+            requested,
+            scale: scale,
+            within: view.bounds
+        )
+        selectionDidChange(in: view)
     }
 
     private func positionControls() {
@@ -173,6 +216,7 @@ final class CaptureSelectionCoordinator: NSObject {
     }
 
     private func confirm() {
+        applyTypedSize()
         guard
             let view = activeView,
             var rect = view.selectionRect,
@@ -180,7 +224,11 @@ final class CaptureSelectionCoordinator: NSObject {
             rect.height >= CaptureSelectionView.minimumSize.height
         else { return }
 
-        rect = rect.integral.intersection(view.bounds)
+        rect = Self.pixelAlignedSelection(
+            rect,
+            scale: view.screen.backingScaleFactor,
+            within: view.bounds
+        )
         let sourceRect = CGRect(
             x: rect.minX,
             y: view.bounds.height - rect.maxY,
@@ -193,6 +241,7 @@ final class CaptureSelectionCoordinator: NSObject {
             pointPixelScale: view.screen.backingScaleFactor,
             includeSystemAudio: controlsModel.includeSystemAudio
         )
+        Self.saveSelection(displayID: view.displayID, rect: rect)
         finish(with: result)
     }
 
@@ -219,6 +268,84 @@ final class CaptureSelectionCoordinator: NSObject {
     private static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
         let key = NSDeviceDescriptionKey("NSScreenNumber")
         return (screen.deviceDescription[key] as? NSNumber).map { CGDirectDisplayID($0.uint32Value) }
+    }
+
+    private static func persistentIdentifier(for displayID: CGDirectDisplayID) -> String {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(displayID)?.takeRetainedValue() else {
+            return "display-\(displayID)"
+        }
+        return CFUUIDCreateString(kCFAllocatorDefault, uuid) as String
+    }
+
+    private static func loadSavedSelection() -> SavedSelection? {
+        guard let data = UserDefaults.standard.data(forKey: savedSelectionKey) else { return nil }
+        return try? JSONDecoder().decode(SavedSelection.self, from: data)
+    }
+
+    private static func saveSelection(displayID: CGDirectDisplayID, rect: CGRect) {
+        let saved = SavedSelection(
+            displayIdentifier: persistentIdentifier(for: displayID),
+            x: rect.minX,
+            y: rect.minY,
+            width: rect.width,
+            height: rect.height
+        )
+        guard let data = try? JSONEncoder().encode(saved) else { return }
+        UserDefaults.standard.set(data, forKey: savedSelectionKey)
+    }
+
+    /// Restores the saved local-display rectangle while handling a display
+    /// that changed resolution or a fallback display that is smaller.
+    private static func fittedSelection(_ saved: CGRect, within bounds: CGRect) -> CGRect {
+        let rect = saved.standardized
+        let width = min(max(CaptureSelectionView.minimumSize.width, rect.width), bounds.width)
+        let height = min(max(CaptureSelectionView.minimumSize.height, rect.height), bounds.height)
+        let x = min(max(rect.minX, bounds.minX), bounds.maxX - width)
+        let y = min(max(rect.minY, bounds.minY), bounds.maxY - height)
+        return CGRect(x: x, y: y, width: width, height: height)
+    }
+
+    /// Aligns origin and dimensions independently so an odd pixel dimension
+    /// remains exact on a Retina display instead of being rounded up by
+    /// `CGRect.integral`.
+    private static func pixelAlignedSelection(
+        _ selection: CGRect,
+        scale rawScale: CGFloat,
+        within bounds: CGRect
+    ) -> CGRect {
+        let scale = max(1, rawScale)
+        let rect = fittedSelection(selection, within: bounds)
+        let minWidth = (CaptureSelectionView.minimumSize.width * scale).rounded(.up)
+        let minHeight = (CaptureSelectionView.minimumSize.height * scale).rounded(.up)
+        let maxWidth = (bounds.width * scale).rounded(.down)
+        let maxHeight = (bounds.height * scale).rounded(.down)
+        let width = min(max((rect.width * scale).rounded(), minWidth), maxWidth)
+        let height = min(max((rect.height * scale).rounded(), minHeight), maxHeight)
+        let minX = (bounds.minX * scale).rounded(.up)
+        let minY = (bounds.minY * scale).rounded(.up)
+        let maxX = (bounds.maxX * scale).rounded(.down) - width
+        let maxY = (bounds.maxY * scale).rounded(.down) - height
+        let x = min(max((rect.minX * scale).rounded(), minX), maxX)
+        let y = min(max((rect.minY * scale).rounded(), minY), maxY)
+
+        return CGRect(
+            x: x / scale,
+            y: y / scale,
+            width: width / scale,
+            height: height / scale
+        )
+    }
+
+    private static func defaultSelection(within fullBounds: CGRect) -> CGRect {
+        let bounds = fullBounds.insetBy(dx: 80, dy: 70)
+        let width = min(max(640, bounds.width * 0.72), bounds.width)
+        let height = min(max(360, bounds.height * 0.66), bounds.height)
+        return CGRect(
+            x: bounds.midX - width / 2,
+            y: bounds.midY - height / 2,
+            width: width,
+            height: height
+        ).integral
     }
 }
 
@@ -250,7 +377,8 @@ private final class CaptureControlsPanel: NSPanel {
 
 @MainActor
 private final class CaptureControlsModel: ObservableObject {
-    @Published var sizeText = ""
+    @Published var widthText = ""
+    @Published var heightText = ""
     @Published var includeSystemAudio: Bool
 
     init(includeSystemAudio: Bool) {
@@ -259,16 +387,38 @@ private final class CaptureControlsModel: ObservableObject {
 }
 
 private struct CaptureControlsView: View {
+    private enum DimensionField: Hashable {
+        case width
+        case height
+    }
+
     @ObservedObject var model: CaptureControlsModel
+    @FocusState private var focusedDimension: DimensionField?
+    let commitSize: () -> Void
     let confirm: () -> Void
     let cancel: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(model.sizeText)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.primary)
+                HStack(spacing: 5) {
+                    Text("W")
+                    dimensionField(
+                        "Width",
+                        text: widthBinding,
+                        focus: .width
+                    )
+                    Text("×")
+                    Text("H")
+                    dimensionField(
+                        "Height",
+                        text: heightBinding,
+                        focus: .height
+                    )
+                }
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.secondary)
+
                 Toggle("Speaker audio", isOn: $model.includeSystemAudio)
                     .toggleStyle(.checkbox)
                     .font(.system(size: 11, weight: .medium))
@@ -283,18 +433,62 @@ private struct CaptureControlsView: View {
                 Label("Record", systemImage: "record.circle")
                     .font(.system(size: 12, weight: .semibold))
             }
-            .keyboardShortcut(.defaultAction)
             .buttonStyle(.borderedProminent)
             .tint(.red)
         }
         .padding(.horizontal, 14)
-        .frame(width: 390, height: 64)
+        .frame(width: 420, height: 64)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .stroke(Color.white.opacity(0.16), lineWidth: 1)
         }
         .preferredColorScheme(.dark)
+        .onChange(of: focusedDimension) { previous, current in
+            if previous != nil, previous != current {
+                commitSize()
+            }
+        }
+    }
+
+    private var widthBinding: Binding<String> {
+        Binding(
+            get: { model.widthText },
+            set: { model.widthText = digitsOnly($0) }
+        )
+    }
+
+    private var heightBinding: Binding<String> {
+        Binding(
+            get: { model.heightText },
+            set: { model.heightText = digitsOnly($0) }
+        )
+    }
+
+    private func dimensionField(
+        _ title: String,
+        text: Binding<String>,
+        focus: DimensionField
+    ) -> some View {
+        TextField(title, text: text)
+            .textFieldStyle(.plain)
+            .multilineTextAlignment(.trailing)
+            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 6)
+            .frame(width: 58, height: 22)
+            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            }
+            .focused($focusedDimension, equals: focus)
+            .onSubmit(commitSize)
+            .accessibilityLabel("Recording \(title.lowercased()) in pixels")
+    }
+
+    private func digitsOnly(_ value: String) -> String {
+        String(value.filter(\.isNumber).prefix(6))
     }
 }
 

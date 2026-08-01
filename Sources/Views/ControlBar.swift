@@ -4,15 +4,28 @@ import SwiftUI
 /// widths the actions wrap into two edge-aligned rows.
 struct ControlBar: View {
     @EnvironmentObject var vm: EditorViewModel
+    @State private var isConfirmingClearAll = false
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
             wideLayout
-                .frame(minWidth: 850, maxWidth: .infinity, alignment: .leading)
+                .frame(minWidth: 970, maxWidth: .infinity, alignment: .leading)
             stackedLayout
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
+        .confirmationDialog(
+            "Clear every video from the timeline?",
+            isPresented: $isConfirmingClearAll,
+            titleVisibility: .visible
+        ) {
+            Button("Clear All Videos", role: .destructive) {
+                vm.clearAll()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes every clip and clears the edit history. It cannot be undone.")
+        }
     }
 
     private var wideLayout: some View {
@@ -22,6 +35,8 @@ struct ControlBar: View {
             divider
 
             editingGroup
+
+            clipInfo
 
             Spacer(minLength: 8)
 
@@ -34,6 +49,7 @@ struct ControlBar: View {
             HStack(spacing: 8) {
                 fileGroup
                 Spacer(minLength: 8)
+                clipInfo
             }
 
             HStack(spacing: 8) {
@@ -83,6 +99,15 @@ struct ControlBar: View {
             .help("Delete the selected clip (⌫)")
             .hoverHighlight()
             .accessibilityLabel("Delete selected clip")
+
+            Button { isConfirmingClearAll = true } label: {
+                Image(systemName: "rectangle.stack.badge.minus")
+            }
+            .buttonStyle(ToolButtonStyle(tint: Color(hex: 0xFF6B6B)))
+            .disabled(!vm.hasContent || vm.isRecording || vm.isFinishingRecording || vm.isExporting)
+            .help("Clear every video from the timeline")
+            .hoverHighlight()
+            .accessibilityLabel("Clear all videos")
 
             divider
 
@@ -228,6 +253,29 @@ struct ControlBar: View {
             .fill(Theme.stroke)
             .frame(width: 1, height: 22)
             .padding(.horizontal, 2)
+    }
+
+    @ViewBuilder
+    private var clipInfo: some View {
+        if let size = vm.selectedClipSizeText {
+            HStack(spacing: 5) {
+                Image(systemName: "aspectratio")
+                Text(size)
+                    .fontDesign(.monospaced)
+            }
+            .font(.system(size: 11.5, weight: .semibold))
+            .foregroundStyle(Theme.textSecondary)
+            .padding(.horizontal, 9)
+            .frame(height: 28)
+            .background(
+                Capsule()
+                    .fill(Theme.panel)
+                    .overlay(Capsule().stroke(Theme.stroke, lineWidth: 1))
+            )
+            .help("Selected video's source dimensions")
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Selected video size \(size)")
+        }
     }
 
     private var muteHelp: String {

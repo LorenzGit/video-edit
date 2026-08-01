@@ -55,6 +55,20 @@ final class EditorViewModel: ObservableObject {
         return names.count > 1 ? "\(first)  +\(names.count - 1)" : first
     }
 
+    /// Oriented source dimensions for the single clip selected in the timeline.
+    var selectedClipSizeText: String? {
+        guard
+            selection.count == 1,
+            let id = selection.first,
+            let chunk = chunks.first(where: { $0.id == id }),
+            let source = sources[chunk.sourceID]
+        else { return nil }
+
+        let width = max(1, Int(source.naturalSize.width.rounded()))
+        let height = max(1, Int(source.naturalSize.height.rounded()))
+        return "\(width) × \(height)"
+    }
+
     // MARK: Timeline zoom
 
     @Published var pps: Double?               // pixels-per-second; nil = fit to width
@@ -630,6 +644,36 @@ final class EditorViewModel: ObservableObject {
         commit {
             chunks.removeAll { $0.id == id }
             selection.remove(id)
+        }
+    }
+
+    /// Removes the entire project after the view has obtained confirmation.
+    /// This deliberately resets history so the destructive action cannot be
+    /// accidentally undone into a project the user explicitly cleared.
+    func clearAll() {
+        guard sourceURL != nil || !chunks.isEmpty else { return }
+
+        player.pause()
+        isPlaying = false
+        thumbTasks.values.forEach { $0.cancel() }
+        thumbTasks.removeAll()
+
+        sources.removeAll()
+        chunks = []
+        selection = []
+        sourceURL = nil
+        hasAudio = false
+        thumbnails = [:]
+        past = []
+        future = []
+        pps = nil
+        currentTime = 0
+        totalDuration = 0
+        statusMessage = nil
+        player.replaceCurrentItem(with: nil)
+
+        if muteAudio {
+            muteAudio = false
         }
     }
 
