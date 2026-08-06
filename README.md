@@ -28,7 +28,11 @@ does the handful of things I actually need and nothing else.
   when you hold a clip near either edge — or use the earlier/later buttons.
 - **Re-time** — change the playback **speed** of selected clips (or all of them),
   from presets or any custom value you type.
-- **Remove audio** with one click.
+- **Mute video audio** with one click.
+- **Add a separate audio track** for music or narration. It appears as a thin
+  lane above the video and supports the same selection, cut, trim, move and
+  speed tools, plus volume and fade-in / fade-out controls. This track stays
+  audible when the video-audio mute toggle is on.
 - **Undo / Redo** every edit.
 - **Preview & scrub** with a zoomable timeline — what you preview is exactly what
   you export.
@@ -124,6 +128,7 @@ rebuilds.
 |---------------------------|--------------|
 | Open video                | ⌘O           |
 | Import video at end       | ⌘I           |
+| Add / replace audio track | ⌥⌘A          |
 | Record / stop screen      | ⇧⌘R          |
 | Stop screen recording     | ⌘Esc         |
 | Export as MP4             | ⌘E           |
@@ -134,7 +139,7 @@ rebuilds.
 | Delete before playhead    | ⌘[           |
 | Delete after playhead     | ⌘]           |
 | Delete selected clip      | ⌫            |
-| Remove / restore audio    | ⌘M           |
+| Mute / restore video audio| ⌘M           |
 | Zoom in / out / fit       | ⌘+ / ⌘- / ⌘0 |
 | Undo / Redo               | ⌘Z / ⇧⌘Z     |
 
@@ -156,16 +161,18 @@ centred. That one composition feeds both the live `AVPlayer` preview and the
 ```
 Sources/
   App/         ReelApp.swift, AppCommands.swift   (entry point + menu shortcuts)
-  Models/      Chunk.swift                          (timeline data model)
+  Models/      Chunk, ImportedAudioTrack             (video/audio timeline models)
   ViewModels/  EditorViewModel.swift                (player, edits, undo, export)
   Views/       ContentView, PreviewSection, TransportBar, ControlBar, SpeedControl,
                TimelineView, EmptyStateView, ExportOverlay, StatusToast
   Support/     Theme.swift, Formatting.swift        (styling + helpers)
 ```
 
-The timeline is horizontally scrollable and zoomable; removing audio drops the
-audio track from the composition entirely (affecting preview, export, and
-clipboard copies).
+The timeline is horizontally scrollable and zoomable; muting video audio drops
+the source clips' audio track from the composition entirely. The separately
+imported audio clips are inserted on their own composition tracks with an audio
+mix for volume and fades, so they remain present in preview, export, and
+clipboard copies regardless of that mute toggle.
 Screen recording uses ScreenCaptureKit for an exact display-relative region and
 AVAssetWriter for the MOV file, including an AAC system-audio track only when
 requested.

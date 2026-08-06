@@ -13,6 +13,11 @@ struct AppCommands: Commands {
             Button("Import Video at End…") { vm.importPanel() }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(!vm.hasContent)
+            Button(vm.hasImportedAudioTrack ? "Replace Audio Track…" : "Add Audio Track…") {
+                vm.importAudioPanel()
+            }
+            .keyboardShortcut("a", modifiers: [.command, .option])
+            .disabled(!vm.hasContent)
             Button(vm.isRecording ? "Stop Screen Recording" : "Record Screen Region…") {
                 if vm.isRecording { vm.stopScreenRecording() }
                 else { vm.beginScreenRecording() }
@@ -58,7 +63,7 @@ struct AppCommands: Commands {
                 .disabled(!vm.hasContent)
             Button("Delete Selected Clip") { vm.deleteSelected() }
                 .keyboardShortcut(.delete, modifiers: [])
-                .disabled(vm.selection.isEmpty)
+                .disabled(!vm.hasAnySelection)
             Divider()
             Button("Move Clip Earlier") { vm.moveSelected(by: -1) }
                 .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
@@ -67,7 +72,7 @@ struct AppCommands: Commands {
                 .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
                 .disabled(!vm.canMoveForward)
             Divider()
-            Button(vm.muteAudio ? "Restore Audio" : "Remove Audio") { vm.muteAudio.toggle() }
+            Button(vm.muteAudio ? "Restore Video Audio" : "Mute Video Audio") { vm.muteAudio.toggle() }
                 .keyboardShortcut("m", modifiers: .command)
                 .disabled(!vm.hasContent || !vm.hasAudio)
         }

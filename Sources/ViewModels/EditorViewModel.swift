@@ -28,6 +28,21 @@ final class EditorViewModel: ObservableObject {
     @Published private(set) var hasAudio: Bool = false
     private var sources: [UUID: Source] = [:]
 
+    /// Optional, independently editable audio lane above the video timeline.
+    private var audioSources: [UUID: ImportedAudioSource] = [:]
+    @Published private(set) var audioChunks: [AudioChunk] = []
+    @Published private(set) var audioSelection: Set<UUID> = []
+    private var importedAudioRebuildTask: Task<Void, Never>?
+
+    var hasImportedAudioTrack: Bool { !audioChunks.isEmpty }
+    var hasAnySelection: Bool { !selection.isEmpty || !audioSelection.isEmpty }
+    var hasAudioSelection: Bool { !audioSelection.isEmpty }
+    var selectedCount: Int { selection.count + audioSelection.count }
+    var selectedAudioChunk: AudioChunk? {
+        guard audioSelection.count == 1, let id = audioSelection.first else { return nil }
+        return audioChunks.first { $0.id == id }
+    }
+
     // MARK: Timeline model
 
     @Published var chunks: [Chunk] = []
@@ -35,7 +50,8 @@ final class EditorViewModel: ObservableObject {
 
     var hasContent: Bool { sourceURL != nil && !chunks.isEmpty }
 
-    /// Drops the audio track from both the preview and the export.
+    /// Drops audio embedded in source videos from preview and export. The
+    /// separately imported audio track deliberately remains audible.
     @Published var muteAudio: Bool = false {
         didSet { if oldValue != muteAudio { rebuild() } }
     }
@@ -88,7 +104,13 @@ final class EditorViewModel: ObservableObject {
 
     // MARK: Undo / redo
 
-    private struct Snapshot { var chunks: [Chunk]; var selection: Set<UUID> }
+    private struct Snapshot {
+        var chunks: [Chunk]
+        var selection: Set<UUID>
+        var audioSources: [UUID: ImportedAudioSource]
+        var audioChunks: [AudioChunk]
+        var audioSelection: Set<UUID>
+    }
     private var past: [Snapshot] = []
     private var future: [Snapshot] = []
     var canUndo: Bool { !past.isEmpty }
@@ -164,6 +186,7 @@ final class EditorViewModel: ObservableObject {
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         recordingTimer?.cancel()
+        importedAudioRebuildTask?.cancel()
     }
 
     // MARK: Loading & importing
@@ -358,6 +381,19 @@ final class EditorViewModel: ObservableObject {
         if let url = pickVideo(title: "Import Video") { importVideo(url: url) }
     }
 
+    /// Adds or replaces the optional audio lane above the video timeline.
+    func importAudioPanel() {
+        guard hasContent else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = hasImportedAudioTrack ? "Replace Audio Track" : "Add Audio Track"
+        if panel.runModal() == .OK, let url = panel.url {
+            importAudio(url: url)
+        }
+    }
+
     private func pickVideo(title: String) -> URL? {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.movie, .quickTimeMovie, .mpeg4Movie]
@@ -369,6 +405,100 @@ final class EditorViewModel: ObservableObject {
 
     func openVideo(url: URL) { Task { await loadFresh(url: url) } }
     func importVideo(url: URL) { Task { await appendImport(url: url) } }
+    func importAudio(url: URL) { Task { await loadImportedAudio(url: url) } }
+
+    private func loadImportedAudio(url: URL) async {
+        let projectSourceID = chunks.first?.sourceID
+        do {
+            let asset = AVURLAsset(url: url)
+            let sourceTracks = try await asset.loadTracks(withMediaType: .audio)
+            guard hasContent, chunks.first?.sourceID == projectSourceID else { return }
+            guard let sourceTrack = sourceTracks.first else {
+                statusMessage = "That file has no audio track."
+                return
+            }
+            let duration = try await asset.load(.duration).seconds
+            guard hasContent, chunks.first?.sourceID == projectSourceID else { return }
+            guard duration.isFinite, duration > 0.01 else {
+                statusMessage = "That audio file has no playable duration."
+                return
+            }
+
+            let source = ImportedAudioSource(
+                url: url,
+                asset: asset,
+                track: sourceTrack,
+                duration: duration
+            )
+            let chunk = AudioChunk(
+                sourceID: source.id,
+                start: 0,
+                end: min(duration, totalDuration)
+            )
+            commit {
+                audioSources = [source.id: source]
+                audioChunks = [chunk]
+                audioSelection = [chunk.id]
+                selection = []
+            }
+            statusMessage = "Added audio track \(url.lastPathComponent)"
+        } catch {
+            guard hasContent, chunks.first?.sourceID == projectSourceID else { return }
+            statusMessage = "Couldn't import audio: \(error.localizedDescription)"
+        }
+    }
+
+    func removeImportedAudio() {
+        guard !audioChunks.isEmpty else { return }
+        commit {
+            audioChunks = []
+            audioSelection = []
+        }
+        statusMessage = "Removed the imported audio track."
+    }
+
+    func audioSourceName(for sourceID: UUID) -> String {
+        audioSources[sourceID]?.url.lastPathComponent ?? "Audio"
+    }
+
+    func setSelectedAudioVolume(_ value: Double) {
+        updateSelectedAudioMix { $0.volume = Float(value) }
+    }
+
+    func setSelectedAudioFadeIn(_ value: Double) {
+        updateSelectedAudioMix { $0.fadeInDuration = value }
+    }
+
+    func setSelectedAudioFadeOut(_ value: Double) {
+        updateSelectedAudioMix { $0.fadeOutDuration = value }
+    }
+
+    var maxSelectedAudioFadeDuration: Double {
+        (selectedAudioChunk?.outputDuration ?? 0) / 2
+    }
+
+    private func updateSelectedAudioMix(_ action: (inout AudioChunk) -> Void) {
+        guard audioSelection.count == 1,
+              let id = audioSelection.first,
+              let index = audioChunks.firstIndex(where: { $0.id == id })
+        else { return }
+        action(&audioChunks[index])
+        normalizeAudioChunk(&audioChunks[index])
+        scheduleImportedAudioRebuild()
+    }
+
+    /// Slider drags can publish dozens of values per second. Coalescing those
+    /// changes keeps the compact lane inspector fluid while updating preview
+    /// as soon as the pointer pauses; export always reads the latest model.
+    private func scheduleImportedAudioRebuild() {
+        importedAudioRebuildTask?.cancel()
+        importedAudioRebuildTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 75_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.rebuild()
+            self.importedAudioRebuildTask = nil
+        }
+    }
 
     private func makeSource(url: URL) async throws -> Source? {
         let asset = AVURLAsset(url: url)
@@ -397,6 +527,10 @@ final class EditorViewModel: ObservableObject {
                 statusMessage = "That file has no video track."
                 return false
             }
+            importedAudioRebuildTask?.cancel()
+            audioSources = [:]
+            audioChunks = []
+            audioSelection = []
             sources = [source.id: source]
             hasAudio = source.audioTrack != nil
             sourceURL = url
@@ -429,6 +563,7 @@ final class EditorViewModel: ObservableObject {
             commit {
                 chunks.append(newChunk)
                 selection = [newChunk.id]
+                audioSelection = []
             }
             generateThumbnails(for: source)
             statusMessage = "Appended \(url.lastPathComponent)"
@@ -443,7 +578,11 @@ final class EditorViewModel: ObservableObject {
 
     /// Builds the edited timeline as a composition plus a video composition that
     /// places each source (whatever its size/orientation) into a common frame.
-    private func buildComposition() -> (composition: AVMutableComposition, video: AVMutableVideoComposition)? {
+    private func buildComposition() -> (
+        composition: AVMutableComposition,
+        video: AVMutableVideoComposition,
+        audioMix: AVAudioMix?
+    )? {
         guard let first = chunks.first, let firstSource = sources[first.sourceID] else { return nil }
         let comp = AVMutableComposition()
         guard let compVideo = comp.addMutableTrack(
@@ -494,7 +633,85 @@ final class EditorViewModel: ObservableObject {
         let fps = max(24, min(60, Double(firstSource.frameRate)))
         videoComp.frameDuration = CMTime(value: 1, timescale: CMTimeScale(fps.rounded()))
         videoComp.instructions = instructions
-        return (comp, videoComp)
+
+        // Audio-lane clips use independent composition tracks. They can be cut,
+        // moved, overlapped and re-timed without ever consulting `muteAudio`.
+        let timelineDuration = cursor.seconds
+        var mixParameters: [AVAudioMixInputParameters] = []
+        for audio in audioChunks.sorted(by: { $0.timelineStart < $1.timelineStart }) {
+            guard let source = audioSources[audio.sourceID], audio.speed > 0 else { continue }
+            let placementStart = max(0, min(audio.timelineStart, timelineDuration))
+            let placedDuration = max(0, min(audio.outputDuration, timelineDuration - placementStart))
+            let sourceDuration = min(audio.sourceDuration, placedDuration * audio.speed)
+            guard placedDuration > 0.001, sourceDuration > 0.001,
+                  let compositionAudio = comp.addMutableTrack(
+                      withMediaType: .audio,
+                      preferredTrackID: kCMPersistentTrackID_Invalid
+                  )
+            else { continue }
+
+            let destinationStart = CMTime(seconds: placementStart, preferredTimescale: timescale)
+            let sourceTime = CMTime(seconds: audio.start, preferredTimescale: timescale)
+            let sourceTimeDuration = CMTime(seconds: sourceDuration, preferredTimescale: timescale)
+            do {
+                try compositionAudio.insertTimeRange(
+                    CMTimeRange(start: sourceTime, duration: sourceTimeDuration),
+                    of: source.track,
+                    at: destinationStart
+                )
+            } catch {
+                continue
+            }
+
+            if audio.speed != 1 {
+                compositionAudio.scaleTimeRange(
+                    CMTimeRange(start: destinationStart, duration: sourceTimeDuration),
+                    toDuration: CMTime(seconds: placedDuration, preferredTimescale: timescale)
+                )
+            }
+
+            let volume = max(0, min(audio.volume, 2))
+            let fadeIn = min(max(0, audio.fadeInDuration), placedDuration / 2)
+            let fadeOut = min(max(0, audio.fadeOutDuration), placedDuration / 2)
+            let parameters = AVMutableAudioMixInputParameters(track: compositionAudio)
+
+            if fadeIn > 0 {
+                parameters.setVolumeRamp(
+                    fromStartVolume: 0,
+                    toEndVolume: volume,
+                    timeRange: CMTimeRange(
+                        start: destinationStart,
+                        duration: CMTime(seconds: fadeIn, preferredTimescale: timescale)
+                    )
+                )
+            } else {
+                parameters.setVolume(volume, at: destinationStart)
+            }
+
+            if fadeOut > 0 {
+                let fadeOutStart = CMTime(
+                    seconds: placementStart + placedDuration - fadeOut,
+                    preferredTimescale: timescale
+                )
+                parameters.setVolumeRamp(
+                    fromStartVolume: volume,
+                    toEndVolume: 0,
+                    timeRange: CMTimeRange(
+                        start: fadeOutStart,
+                        duration: CMTime(seconds: fadeOut, preferredTimescale: timescale)
+                    )
+                )
+            }
+            mixParameters.append(parameters)
+        }
+
+        let audioMix: AVMutableAudioMix? = mixParameters.isEmpty ? nil : {
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = mixParameters
+            return mix
+        }()
+
+        return (comp, videoComp, audioMix)
     }
 
     /// Transform that orients a source frame and aspect-fits it, centred, into `renderSize`.
@@ -524,9 +741,11 @@ final class EditorViewModel: ObservableObject {
         }
         let item = AVPlayerItem(asset: built.composition)
         item.videoComposition = built.video
+        item.audioMix = built.audioMix
         item.audioTimePitchAlgorithm = .spectral
         player.replaceCurrentItem(with: item)
         seek(to: time ?? min(currentTime, totalDuration))
+        if isPlaying { player.play() }
     }
 
     // MARK: Transport
@@ -572,7 +791,15 @@ final class EditorViewModel: ObservableObject {
 
     // MARK: Editing operations
 
-    private func snapshot() -> Snapshot { Snapshot(chunks: chunks, selection: selection) }
+    private func snapshot() -> Snapshot {
+        Snapshot(
+            chunks: chunks,
+            selection: selection,
+            audioSources: audioSources,
+            audioChunks: audioChunks,
+            audioSelection: audioSelection
+        )
+    }
 
     private func commit(_ action: () -> Void) {
         past.append(snapshot())
@@ -594,7 +821,43 @@ final class EditorViewModel: ObservableObject {
         return nil
     }
 
+    private func selectedAudioChunkAtPlayhead() -> (index: Int, local: Double)? {
+        guard audioSelection.count == 1, let id = audioSelection.first,
+              let index = audioChunks.firstIndex(where: { $0.id == id })
+        else { return nil }
+        let chunk = audioChunks[index]
+        let local = currentTime - chunk.timelineStart
+        guard local >= -1e-6, local < chunk.outputDuration - 1e-6 else { return nil }
+        return (index, max(0, local))
+    }
+
     func splitAtPlayhead() {
+        if let (index, local) = selectedAudioChunkAtPlayhead() {
+            let chunk = audioChunks[index]
+            guard local > 0.02, local < chunk.outputDuration - 0.02 else { return }
+            let sourceSplit = chunk.start + local * chunk.speed
+            commit {
+                var first = chunk
+                first.end = sourceSplit
+                first.fadeOutDuration = 0
+                var second = AudioChunk(
+                    sourceID: chunk.sourceID,
+                    start: sourceSplit,
+                    end: chunk.end,
+                    timelineStart: currentTime,
+                    speed: chunk.speed,
+                    volume: chunk.volume,
+                    fadeInDuration: 0,
+                    fadeOutDuration: chunk.fadeOutDuration
+                )
+                normalizeAudioChunk(&first)
+                normalizeAudioChunk(&second)
+                audioChunks.replaceSubrange(index...index, with: [first, second])
+                audioSelection = [second.id]
+            }
+            return
+        }
+
         guard let (index, local, _) = chunkAtPlayhead() else { return }
         let chunk = chunks[index]
         if local <= 0.02 || local >= chunk.outputDuration - 0.02 { return }
@@ -608,6 +871,17 @@ final class EditorViewModel: ObservableObject {
     }
 
     func deleteBeforePlayhead() {
+        if let (index, local) = selectedAudioChunkAtPlayhead() {
+            guard local > 0.02 else { return }
+            commit {
+                audioChunks[index].start += local * audioChunks[index].speed
+                audioChunks[index].timelineStart = currentTime
+                normalizeAudioChunk(&audioChunks[index])
+                audioSelection = [audioChunks[index].id]
+            }
+            return
+        }
+
         guard let (index, local, start) = chunkAtPlayhead() else { return }
         let chunk = chunks[index]
         guard local > 0.02 else { return }
@@ -620,6 +894,17 @@ final class EditorViewModel: ObservableObject {
     }
 
     func deleteAfterPlayhead() {
+        if let (index, local) = selectedAudioChunkAtPlayhead() {
+            let chunk = audioChunks[index]
+            guard local < chunk.outputDuration - 0.02 else { return }
+            commit {
+                audioChunks[index].end = chunk.start + local * chunk.speed
+                normalizeAudioChunk(&audioChunks[index])
+                audioSelection = [audioChunks[index].id]
+            }
+            return
+        }
+
         guard let (index, local, start) = chunkAtPlayhead() else { return }
         let chunk = chunks[index]
         guard local < chunk.outputDuration - 0.02 else { return }
@@ -632,6 +917,13 @@ final class EditorViewModel: ObservableObject {
     }
 
     func deleteSelected() {
+        if !audioSelection.isEmpty {
+            commit {
+                audioChunks.removeAll { audioSelection.contains($0.id) }
+                audioSelection = []
+            }
+            return
+        }
         guard chunks.contains(where: { selection.contains($0.id) }) else { return }
         commit {
             chunks.removeAll { selection.contains($0.id) }
@@ -661,6 +953,10 @@ final class EditorViewModel: ObservableObject {
         sources.removeAll()
         chunks = []
         selection = []
+        audioSources.removeAll()
+        audioChunks = []
+        audioSelection = []
+        importedAudioRebuildTask?.cancel()
         sourceURL = nil
         hasAudio = false
         thumbnails = [:]
@@ -693,6 +989,7 @@ final class EditorViewModel: ObservableObject {
             isPlaying = false
         }
         selection = [id]
+        audioSelection = []
     }
 
     /// Produces a clamped, non-mutating trim preview. Because every pointer event
@@ -783,10 +1080,165 @@ final class EditorViewModel: ObservableObject {
         }
     }
 
+    // MARK: Audio-lane trimming and placement
+
+    func beginAudioTrimPreview(_ id: UUID) {
+        guard audioChunks.contains(where: { $0.id == id }) else { return }
+        if isPlaying {
+            player.pause()
+            isPlaying = false
+        }
+        audioSelection = [id]
+        selection = []
+    }
+
+    func audioTrimPreview(
+        from original: AudioChunk,
+        edge: TrimEdge,
+        sourceDelta: Double
+    ) -> AudioChunk {
+        guard audioChunks.contains(where: { $0.id == original.id }),
+              let source = audioSources[original.sourceID],
+              original.speed > 0
+        else { return original }
+
+        let minimumDuration = min(source.duration, 0.02)
+        var updated = original
+        switch edge {
+        case .leading:
+            let earliestSource = max(0, original.start - original.timelineStart * original.speed)
+            let nextStart = min(
+                max(earliestSource, original.start + sourceDelta),
+                original.end - minimumDuration
+            )
+            updated.start = nextStart
+            updated.timelineStart = original.timelineStart
+                + (nextStart - original.start) / original.speed
+        case .trailing:
+            let latestSource = min(
+                source.duration,
+                original.start + max(0, totalDuration - original.timelineStart) * original.speed
+            )
+            updated.end = max(
+                original.start + minimumDuration,
+                min(latestSource, original.end + sourceDelta)
+            )
+        }
+        normalizeAudioChunk(&updated)
+        return updated
+    }
+
+    @discardableResult
+    func commitAudioTrimPreview(_ preview: AudioChunk) -> Bool {
+        guard let index = audioChunks.firstIndex(where: { $0.id == preview.id }),
+              audioChunks[index] != preview,
+              audioChunks[index].sourceID == preview.sourceID
+        else { return false }
+        commit {
+            audioChunks[index] = preview
+            audioSelection = [preview.id]
+            selection = []
+        }
+        return true
+    }
+
+    func canRestoreAudioTrim(_ id: UUID, edge: TrimEdge) -> Bool {
+        guard let chunk = audioChunks.first(where: { $0.id == id }),
+              let source = audioSources[chunk.sourceID]
+        else { return false }
+        switch edge {
+        case .leading:
+            return min(chunk.start, chunk.timelineStart * chunk.speed) > 0.001
+        case .trailing:
+            let latestSource = min(
+                source.duration,
+                chunk.start + max(0, totalDuration - chunk.timelineStart) * chunk.speed
+            )
+            return latestSource - chunk.end > 0.001
+        }
+    }
+
+    func restoreAudioTrim(_ id: UUID, edge: TrimEdge) {
+        guard let index = audioChunks.firstIndex(where: { $0.id == id }),
+              let source = audioSources[audioChunks[index].sourceID],
+              canRestoreAudioTrim(id, edge: edge)
+        else { return }
+        commit {
+            switch edge {
+            case .leading:
+                let recoverable = min(
+                    audioChunks[index].start,
+                    audioChunks[index].timelineStart * audioChunks[index].speed
+                )
+                audioChunks[index].start -= recoverable
+                audioChunks[index].timelineStart -= recoverable / audioChunks[index].speed
+            case .trailing:
+                audioChunks[index].end = min(
+                    source.duration,
+                    audioChunks[index].start
+                        + max(0, totalDuration - audioChunks[index].timelineStart)
+                        * audioChunks[index].speed
+                )
+            }
+            normalizeAudioChunk(&audioChunks[index])
+            audioSelection = [id]
+            selection = []
+        }
+    }
+
+    func audioMovePreview(from original: AudioChunk, outputDelta: Double) -> AudioChunk {
+        var updated = original
+        updated.timelineStart = original.timelineStart + outputDelta
+        normalizeAudioChunk(&updated)
+        return updated
+    }
+
+    @discardableResult
+    func commitAudioMovePreview(_ preview: AudioChunk) -> Bool {
+        guard let index = audioChunks.firstIndex(where: { $0.id == preview.id }),
+              audioChunks[index] != preview,
+              audioChunks[index].sourceID == preview.sourceID
+        else { return false }
+        commit {
+            audioChunks[index] = preview
+            audioSelection = [preview.id]
+            selection = []
+        }
+        return true
+    }
+
+    private func normalizeAudioChunk(_ chunk: inout AudioChunk) {
+        guard let source = audioSources[chunk.sourceID] else { return }
+        chunk.speed = max(Self.minSpeed, chunk.speed)
+        let minimumDuration = min(source.duration, 0.02)
+        chunk.start = max(0, min(chunk.start, source.duration - minimumDuration))
+        chunk.end = max(chunk.start + minimumDuration, min(chunk.end, source.duration))
+        let maxStart = max(0, totalDuration - chunk.outputDuration)
+        chunk.timelineStart = max(0, min(chunk.timelineStart, maxStart))
+        chunk.volume = max(0, min(chunk.volume, 2))
+        let maxFade = chunk.outputDuration / 2
+        chunk.fadeInDuration = max(0, min(chunk.fadeInDuration, maxFade))
+        chunk.fadeOutDuration = max(0, min(chunk.fadeOutDuration, maxFade))
+    }
+
     /// Applies a speed to the selected chunks, or to every chunk when `all`.
     func setSpeed(_ speed: Double, all: Bool = false) {
         guard speed.isFinite, speed > 0 else { return }
         let clamped = max(speed, Self.minSpeed)
+        if !audioSelection.isEmpty {
+            let targets = all ? Set(audioChunks.map(\.id)) : audioSelection
+            let needsChange = audioChunks.contains {
+                targets.contains($0.id) && $0.speed != clamped
+            }
+            guard needsChange else { return }
+            commit {
+                for index in audioChunks.indices where targets.contains(audioChunks[index].id) {
+                    audioChunks[index].speed = clamped
+                    normalizeAudioChunk(&audioChunks[index])
+                }
+            }
+            return
+        }
         let targets: Set<UUID> = all ? Set(chunks.map(\.id)) : selection
         guard !targets.isEmpty else { return }
         let needsChange = chunks.contains { targets.contains($0.id) && $0.speed != clamped }
@@ -805,11 +1257,31 @@ final class EditorViewModel: ObservableObject {
         return chunks.firstIndex { $0.id == id }
     }
 
-    var canMoveBackward: Bool { if let i = singleSelectedIndex { return i > 0 }; return false }
-    var canMoveForward: Bool { if let i = singleSelectedIndex { return i < chunks.count - 1 }; return false }
+    private var singleSelectedAudioIndex: Int? {
+        guard audioSelection.count == 1, let id = audioSelection.first else { return nil }
+        return audioChunks.firstIndex { $0.id == id }
+    }
+
+    var canMoveBackward: Bool {
+        if let i = singleSelectedAudioIndex { return audioChunks[i].timelineStart > 0.001 }
+        if let i = singleSelectedIndex { return i > 0 }
+        return false
+    }
+    var canMoveForward: Bool {
+        if let i = singleSelectedAudioIndex { return audioChunks[i].timelineEnd < totalDuration - 0.001 }
+        if let i = singleSelectedIndex { return i < chunks.count - 1 }
+        return false
+    }
 
     /// Moves the single selected clip one slot earlier (-1) or later (+1).
     func moveSelected(by offset: Int) {
+        if let index = singleSelectedAudioIndex {
+            commit {
+                audioChunks[index].timelineStart += Double(offset) * 0.25
+                normalizeAudioChunk(&audioChunks[index])
+            }
+            return
+        }
         guard let i = singleSelectedIndex else { return }
         let j = i + offset
         guard chunks.indices.contains(j) else { return }
@@ -830,6 +1302,7 @@ final class EditorViewModel: ObservableObject {
         if sourceIndex < insertionIndex { insertionIndex -= 1 }
         guard insertionIndex != sourceIndex else {
             selection = [id]
+            audioSelection = []
             return true
         }
 
@@ -837,6 +1310,7 @@ final class EditorViewModel: ObservableObject {
             let moved = chunks.remove(at: sourceIndex)
             chunks.insert(moved, at: min(max(0, insertionIndex), chunks.count))
             selection = [id]
+            audioSelection = []
         }
         return true
     }
@@ -848,6 +1322,9 @@ final class EditorViewModel: ObservableObject {
         future.append(snapshot())
         chunks = snap.chunks
         selection = snap.selection
+        audioSources = snap.audioSources
+        audioChunks = snap.audioChunks
+        audioSelection = snap.audioSelection
         rebuild()
     }
 
@@ -856,6 +1333,9 @@ final class EditorViewModel: ObservableObject {
         past.append(snapshot())
         chunks = snap.chunks
         selection = snap.selection
+        audioSources = snap.audioSources
+        audioChunks = snap.audioChunks
+        audioSelection = snap.audioSelection
         rebuild()
     }
 
@@ -867,12 +1347,28 @@ final class EditorViewModel: ObservableObject {
         } else {
             selection = [id]
         }
+        audioSelection = []
     }
 
-    func clearSelection() { selection = [] }
+    func selectAudio(_ id: UUID) {
+        guard audioChunks.contains(where: { $0.id == id }) else { return }
+        audioSelection = [id]
+        selection = []
+    }
+
+    func clearSelection() {
+        selection = []
+        audioSelection = []
+    }
 
     /// A representative speed for the current selection (or whole timeline).
     var activeSpeed: Double? {
+        if !audioSelection.isEmpty {
+            let speeds = Set(
+                audioChunks.filter { audioSelection.contains($0.id) }.map(\.speed)
+            )
+            return speeds.count == 1 ? speeds.first : nil
+        }
         let targets = selection.isEmpty ? Set(chunks.map(\.id)) : selection
         let speeds = Set(chunks.filter { targets.contains($0.id) }.map(\.speed))
         return speeds.count == 1 ? speeds.first : nil
@@ -983,6 +1479,7 @@ final class EditorViewModel: ObservableObject {
         session.outputURL = url
         session.outputFileType = .mp4
         session.videoComposition = built.video
+        session.audioMix = built.audioMix
         session.audioTimePitchAlgorithm = .spectral
 
         if isPlaying { player.pause(); isPlaying = false }

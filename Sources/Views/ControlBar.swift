@@ -5,6 +5,7 @@ import SwiftUI
 struct ControlBar: View {
     @EnvironmentObject var vm: EditorViewModel
     @State private var isConfirmingClearAll = false
+    @State private var isAudioInspectorPresented = false
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -15,16 +16,19 @@ struct ControlBar: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 8)
         .confirmationDialog(
-            "Clear every video from the timeline?",
+            "Clear the entire timeline?",
             isPresented: $isConfirmingClearAll,
             titleVisibility: .visible
         ) {
-            Button("Clear All Videos", role: .destructive) {
+            Button("Clear Timeline", role: .destructive) {
                 vm.clearAll()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes every clip and clears the edit history. It cannot be undone.")
+        }
+        .onChange(of: vm.hasAudioSelection) { _, isSelected in
+            if !isSelected { isAudioInspectorPresented = false }
         }
     }
 
@@ -95,7 +99,7 @@ struct ControlBar: View {
                 Image(systemName: "trash")
             }
             .buttonStyle(ToolButtonStyle(tint: Color(hex: 0xFF6B6B)))
-            .disabled(vm.selection.isEmpty)
+            .disabled(!vm.hasAnySelection)
             .help("Delete the selected clip (⌫)")
             .hoverHighlight()
             .accessibilityLabel("Delete selected clip")
@@ -105,9 +109,9 @@ struct ControlBar: View {
             }
             .buttonStyle(ToolButtonStyle(tint: Color(hex: 0xFF6B6B)))
             .disabled(!vm.hasContent || vm.isRecording || vm.isFinishingRecording || vm.isExporting)
-            .help("Clear every video from the timeline")
+            .help("Clear the video and audio tracks")
             .hoverHighlight()
-            .accessibilityLabel("Clear all videos")
+            .accessibilityLabel("Clear timeline")
 
             divider
 
@@ -140,7 +144,7 @@ struct ControlBar: View {
             .disabled(!vm.hasContent || !vm.hasAudio)
             .help(muteHelp)
             .hoverHighlight()
-            .accessibilityLabel(vm.muteAudio ? "Restore audio" : "Remove audio")
+            .accessibilityLabel(vm.muteAudio ? "Restore video audio" : "Mute video audio")
         }
     }
 
@@ -182,6 +186,26 @@ struct ControlBar: View {
             .help("Append another video to the end (⌘I)")
             .hoverHighlight()
             .accessibilityLabel("Append video")
+
+            Button {
+                if vm.hasAudioSelection {
+                    isAudioInspectorPresented.toggle()
+                } else {
+                    vm.importAudioPanel()
+                }
+            } label: {
+                Image(systemName: audioButtonIcon)
+            }
+            .buttonStyle(IconButtonStyle(active: vm.hasImportedAudioTrack))
+            .disabled(!vm.hasContent)
+            .help(audioButtonHelp)
+            .hoverHighlight()
+            .accessibilityLabel(audioButtonHelp)
+            .popover(isPresented: $isAudioInspectorPresented, arrowEdge: .bottom) {
+                AudioMixInspector(isPresented: $isAudioInspectorPresented)
+                    .frame(width: 278)
+                    .background(Theme.panel)
+            }
 
             Button { vm.export() } label: {
                 Image(systemName: "square.and.arrow.up")
@@ -279,8 +303,20 @@ struct ControlBar: View {
     }
 
     private var muteHelp: String {
-        if !vm.hasAudio { return "This video has no audio track" }
-        return vm.muteAudio ? "Audio removed — click to restore (⌘M)" : "Remove audio (⌘M)"
+        if !vm.hasAudio { return "These videos have no embedded audio" }
+        return vm.muteAudio
+            ? "Video audio muted — the separate audio track stays audible (⌘M)"
+            : "Mute audio embedded in the videos; the separate audio track stays audible (⌘M)"
+    }
+
+    private var audioButtonIcon: String {
+        if vm.hasAudioSelection { return "slider.horizontal.3" }
+        return vm.hasImportedAudioTrack ? "waveform" : "waveform.badge.plus"
+    }
+
+    private var audioButtonHelp: String {
+        if vm.hasAudioSelection { return "Audio volume and fades" }
+        return vm.hasImportedAudioTrack ? "Replace audio track" : "Add audio track"
     }
 
     private var recordButtonTitle: String {

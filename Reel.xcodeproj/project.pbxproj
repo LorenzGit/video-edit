@@ -16,6 +16,7 @@
 		3CBF2BF8C038EE37CF34C248 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB16497C1C42290F9504FD2 /* Formatting.swift */; };
 		4F421D57D7F4ED2ED5B11056 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB39F96F24C7BCA733D4272 /* GlobalHotKey.swift */; };
 		6516ACEC10DAA77B98CBB19D /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E5D8FD36ECAA2076A856CC /* TimelineView.swift */; };
+		752661631F3364F55CD6C6B6 /* ImportedAudioTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AFFE519CD9907A6053C68A5 /* ImportedAudioTrack.swift */; };
 		7FF366C3EB02034506CFA0EF /* ScreenRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA6BE3291EDEED847B598A6 /* ScreenRecorder.swift */; };
 		8AEC86749042D017A40A2AE6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12F9B2BB930F78A556966CC /* Theme.swift */; };
 		9C90682BC1782768EA148469 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD74B2C8ECACBA281C329CC /* AppCommands.swift */; };
@@ -36,6 +37,7 @@
 		5DD74B2C8ECACBA281C329CC /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
 		696B0B77025CF970B1A47688 /* CaptureSelectionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSelectionCoordinator.swift; sourceTree = "<group>"; };
 		78E5D8FD36ECAA2076A856CC /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
+		7AFFE519CD9907A6053C68A5 /* ImportedAudioTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportedAudioTrack.swift; sourceTree = "<group>"; };
 		81482E72C9BAF48521E6243C /* Chunk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chunk.swift; sourceTree = "<group>"; };
 		8A0AB4886CBBA76222EDDDE8 /* TransportBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportBar.swift; sourceTree = "<group>"; };
 		90C0BDEC1B15FD694A7D63A2 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
@@ -141,6 +143,7 @@
 			isa = PBXGroup;
 			children = (
 				81482E72C9BAF48521E6243C /* Chunk.swift */,
+				7AFFE519CD9907A6053C68A5 /* ImportedAudioTrack.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -225,6 +228,7 @@
 				0A03181BB25A62917D7367AD /* ExportOverlay.swift in Sources */,
 				3CBF2BF8C038EE37CF34C248 /* Formatting.swift in Sources */,
 				4F421D57D7F4ED2ED5B11056 /* GlobalHotKey.swift in Sources */,
+				752661631F3364F55CD6C6B6 /* ImportedAudioTrack.swift in Sources */,
 				AC071BB60CAD5777B2A72EA1 /* PreviewSection.swift in Sources */,
 				E2A67FC0E3644721ED624045 /* RecordingStatusItemController.swift in Sources */,
 				00587E11D314C5F0D87EA2D0 /* ReelApp.swift in Sources */,
@@ -246,7 +250,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Generated/Info.plist;
@@ -255,7 +259,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.reel;
 				PRODUCT_NAME = Reel;
 				SDKROOT = macosx;
@@ -388,7 +392,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Generated/Info.plist;
@@ -397,7 +401,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.2;
+				MARKETING_VERSION = 1.3;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.reel;
 				PRODUCT_NAME = Reel;
 				SDKROOT = macosx;

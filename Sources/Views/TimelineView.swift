@@ -7,8 +7,11 @@ struct TimelineView: View {
     @State private var timelineDrag: TimelineDragState?
     @State private var dragContext: TimelineDragContext?
     @State private var trimPreview: TimelineTrimPreview?
+    @State private var audioTrimPreview: AudioTimelineTrimPreview?
+    @State private var audioMovePreview: AudioTimelineMovePreview?
 
     private let rulerHeight: CGFloat = 18
+    private let audioLaneHeight: CGFloat = 34
 
     var body: some View {
         VStack(spacing: 0) {
@@ -30,8 +33,9 @@ struct TimelineView: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
         }
-        .frame(height: 150)
+        .frame(height: vm.hasImportedAudioTrack ? 194 : 150)
         .background(Theme.panel.opacity(0.45))
+        .animation(.easeInOut(duration: 0.18), value: vm.hasImportedAudioTrack)
         .onDisappear {
             stopAutoScroll()
         }
@@ -42,6 +46,12 @@ struct TimelineView: View {
         return vm.chunks.map { chunk in
             chunk.id == trimPreview.chunkID ? trimPreview.preview : chunk
         }
+    }
+
+    private var displayedAudioChunks: [AudioChunk] {
+        let preview = audioTrimPreview?.preview ?? audioMovePreview?.preview
+        guard let preview else { return vm.audioChunks }
+        return vm.audioChunks.map { $0.id == preview.id ? preview : $0 }
     }
 
     private func fitScale(_ width: CGFloat, total: Double) -> Double {
@@ -56,52 +66,214 @@ struct TimelineView: View {
         let scale = vm.pps ?? fitScale(width, total: total)
         let contentWidth = CGFloat(total * scale)
         let bodyHeight = height
-        let clipHeight = max(40, height - rulerHeight - 6)
+        let laneSpacing: CGFloat = 6
+        let videoHeight = max(
+            40,
+            height - rulerHeight - laneSpacing
+                - (vm.hasImportedAudioTrack ? audioLaneHeight + laneSpacing : 0)
+        )
         let playheadX = min(max(CGFloat(vm.currentTime) * CGFloat(scale), 0), contentWidth)
         let anchorStep = max(1, Int((total / 400).rounded(.up)))
 
-        return ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: true) {
-                ZStack(alignment: .topLeading) {
-                    VStack(spacing: 6) {
+        return ZStack(alignment: .topTrailing) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: true) {
+                    ZStack(alignment: .topLeading) {
+                        VStack(spacing: laneSpacing) {
                         RulerView(scale: CGFloat(scale), total: total, width: contentWidth)
                             .frame(width: contentWidth, height: rulerHeight)
                             .contentShape(Rectangle())
                             .gesture(scrubGesture(scale: scale))
-                        chunkRow(
-                            chunks: chunks,
-                            scale: CGFloat(scale),
-                            viewportFrame: viewportFrame
-                        )
-                            .frame(width: contentWidth, height: clipHeight)
+                            if vm.hasImportedAudioTrack {
+                                audioLane(scale: CGFloat(scale))
+                                    .frame(width: contentWidth, height: audioLaneHeight)
+                            }
+                            chunkRow(
+                                chunks: chunks,
+                                scale: CGFloat(scale),
+                                viewportFrame: viewportFrame
+                            )
+                                .frame(width: contentWidth, height: videoHeight)
+                        }
+
+                        // Invisible scroll anchors so playback can keep the playhead in view.
+                        ForEach(Array(stride(from: 0, through: Int(total), by: anchorStep)), id: \.self) { sec in
+                            Color.clear
+                                .frame(width: 1, height: 1)
+                                .position(x: CGFloat(Double(sec) * scale), y: 1)
+                                .id(sec)
+                        }
+
+                        PlayheadView()
+                            .frame(width: 12, height: bodyHeight)
+                            .offset(x: playheadX - 6)
+                            .allowsHitTesting(false)
+
+                        TimelineScrollViewAccessor(controller: scrollController)
+                            .frame(width: 0, height: 0)
+                            .allowsHitTesting(false)
                     }
-
-                    // Invisible scroll anchors so playback can keep the playhead in view.
-                    ForEach(Array(stride(from: 0, through: Int(total), by: anchorStep)), id: \.self) { sec in
-                        Color.clear
-                            .frame(width: 1, height: 1)
-                            .position(x: CGFloat(Double(sec) * scale), y: 1)
-                            .id(sec)
-                    }
-
-                    PlayheadView()
-                        .frame(width: 12, height: bodyHeight)
-                        .offset(x: playheadX - 6)
-                        .allowsHitTesting(false)
-
-                    TimelineScrollViewAccessor(controller: scrollController)
-                        .frame(width: 0, height: 0)
-                        .allowsHitTesting(false)
+                    .frame(width: contentWidth, height: bodyHeight)
                 }
-                .frame(width: contentWidth, height: bodyHeight)
+                .frame(height: bodyHeight)
+                .onChange(of: vm.currentTime) { _, time in
+                    guard vm.isPlaying, vm.pps != nil, !vm.isScrubbing else { return }
+                    let snapped = (Int(time) / anchorStep) * anchorStep
+                    proxy.scrollTo(snapped, anchor: .center)
+                }
             }
-            .frame(height: bodyHeight)
-            .onChange(of: vm.currentTime) { _, time in
-                guard vm.isPlaying, vm.pps != nil, !vm.isScrubbing else { return }
-                let snapped = (Int(time) / anchorStep) * anchorStep
-                proxy.scrollTo(snapped, anchor: .center)
+
+        }
+    }
+
+    private func audioLane(scale: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Theme.panelHi.opacity(0.65))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Theme.stroke, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture { vm.clearSelection() }
+
+            ForEach(displayedAudioChunks) { chunk in
+                AudioChunkView(
+                    chunk: chunk,
+                    width: max(3, CGFloat(chunk.outputDuration) * scale),
+                    onMoveChanged: { translation in
+                        updateAudioMovePreview(
+                            chunk: chunk,
+                            translation: translation,
+                            scale: scale
+                        )
+                    },
+                    onMoveEnded: { translation in
+                        finishAudioMovePreview(
+                            chunk: chunk,
+                            translation: translation,
+                            scale: scale
+                        )
+                    },
+                    onTrimChanged: { edge, translation in
+                        updateAudioTrimPreview(
+                            chunk: chunk,
+                            edge: edge,
+                            translation: translation,
+                            scale: scale
+                        )
+                    },
+                    onTrimEnded: { edge, translation in
+                        finishAudioTrimPreview(
+                            chunk: chunk,
+                            edge: edge,
+                            translation: translation,
+                            scale: scale
+                        )
+                    },
+                    onTrimRestore: { edge in
+                        restoreAudioTrim(chunk: chunk, edge: edge, scale: scale)
+                    }
+                )
+                .frame(width: max(3, CGFloat(chunk.outputDuration) * scale))
+                .offset(x: CGFloat(chunk.timelineStart) * scale)
             }
         }
+        .clipped()
+    }
+
+    private func updateAudioTrimPreview(
+        chunk: AudioChunk,
+        edge: EditorViewModel.TrimEdge,
+        translation: CGFloat,
+        scale: CGFloat
+    ) {
+        var session: AudioTimelineTrimPreview
+        if let current = audioTrimPreview,
+           current.chunkID == chunk.id,
+           current.edge == edge {
+            session = current
+        } else {
+            audioMovePreview = nil
+            let wasFitZoom = vm.pps == nil
+            if wasFitZoom { vm.pps = Double(scale) }
+            vm.beginAudioTrimPreview(chunk.id)
+            session = AudioTimelineTrimPreview(
+                chunkID: chunk.id,
+                edge: edge,
+                original: chunk,
+                preview: chunk,
+                scale: scale,
+                wasFitZoom: wasFitZoom
+            )
+        }
+
+        let sourceDelta = Double(translation / max(session.scale, 0.0001))
+            * session.original.speed
+        session.preview = vm.audioTrimPreview(
+            from: session.original,
+            edge: edge,
+            sourceDelta: sourceDelta
+        )
+        audioTrimPreview = session
+    }
+
+    private func finishAudioTrimPreview(
+        chunk: AudioChunk,
+        edge: EditorViewModel.TrimEdge,
+        translation: CGFloat,
+        scale: CGFloat
+    ) {
+        updateAudioTrimPreview(chunk: chunk, edge: edge, translation: translation, scale: scale)
+        guard let session = audioTrimPreview else { return }
+        let changed = vm.commitAudioTrimPreview(session.preview)
+        audioTrimPreview = nil
+        if !changed, session.wasFitZoom { vm.pps = nil }
+    }
+
+    private func restoreAudioTrim(
+        chunk: AudioChunk,
+        edge: EditorViewModel.TrimEdge,
+        scale: CGFloat
+    ) {
+        if vm.pps == nil { vm.pps = Double(scale) }
+        vm.restoreAudioTrim(chunk.id, edge: edge)
+    }
+
+    private func updateAudioMovePreview(
+        chunk: AudioChunk,
+        translation: CGFloat,
+        scale: CGFloat
+    ) {
+        var session: AudioTimelineMovePreview
+        if let current = audioMovePreview, current.chunkID == chunk.id {
+            session = current
+        } else {
+            audioTrimPreview = nil
+            vm.selectAudio(chunk.id)
+            session = AudioTimelineMovePreview(
+                chunkID: chunk.id,
+                original: chunk,
+                preview: chunk,
+                scale: scale
+            )
+        }
+        session.preview = vm.audioMovePreview(
+            from: session.original,
+            outputDelta: Double(translation / max(session.scale, 0.0001))
+        )
+        audioMovePreview = session
+    }
+
+    private func finishAudioMovePreview(
+        chunk: AudioChunk,
+        translation: CGFloat,
+        scale: CGFloat
+    ) {
+        updateAudioMovePreview(chunk: chunk, translation: translation, scale: scale)
+        guard let session = audioMovePreview else { return }
+        _ = vm.commitAudioMovePreview(session.preview)
+        audioMovePreview = nil
     }
 
     private func chunkRow(
@@ -375,6 +547,22 @@ private struct TimelineTrimPreview {
     let wasFitZoom: Bool
 }
 
+private struct AudioTimelineTrimPreview {
+    let chunkID: UUID
+    let edge: EditorViewModel.TrimEdge
+    let original: AudioChunk
+    var preview: AudioChunk
+    let scale: CGFloat
+    let wasFitZoom: Bool
+}
+
+private struct AudioTimelineMovePreview {
+    let chunkID: UUID
+    let original: AudioChunk
+    var preview: AudioChunk
+    let scale: CGFloat
+}
+
 @MainActor
 private final class TimelineScrollController: ObservableObject {
     weak var scrollView: NSScrollView?
@@ -472,6 +660,218 @@ private struct TimelineScrollViewAccessor: NSViewRepresentable {
         DispatchQueue.main.async {
             controller.attach(from: nsView)
         }
+    }
+}
+
+// MARK: - Thin independent audio lane
+
+private struct AudioChunkView: View {
+    @EnvironmentObject var vm: EditorViewModel
+    let chunk: AudioChunk
+    let width: CGFloat
+    let onMoveChanged: (CGFloat) -> Void
+    let onMoveEnded: (CGFloat) -> Void
+    let onTrimChanged: (EditorViewModel.TrimEdge, CGFloat) -> Void
+    let onTrimEnded: (EditorViewModel.TrimEdge, CGFloat) -> Void
+    let onTrimRestore: (EditorViewModel.TrimEdge) -> Void
+
+    private var isSelected: Bool { vm.audioSelection.contains(chunk.id) }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: 0x317C78), Color(hex: 0x214F58)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            waveform
+
+            HStack(spacing: 5) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 9, weight: .bold))
+                if width > 94 {
+                    Text(vm.audioSourceName(for: chunk.sourceID))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 0)
+                if chunk.speed != 1, width > 58 {
+                    Text(speedLabel(chunk.speed))
+                        .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Theme.speedTint))
+                        .foregroundStyle(.black)
+                }
+            }
+            .font(.system(size: 9.5, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.92))
+            .padding(.horizontal, 7)
+            .allowsHitTesting(false)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .stroke(isSelected ? Theme.speedTint : Color.white.opacity(0.18),
+                        lineWidth: isSelected ? 2 : 1)
+        }
+        .overlay {
+            if isSelected {
+                HStack(spacing: 0) {
+                    TrimHandle(
+                        edge: .leading,
+                        onDragChanged: { onTrimChanged(.leading, $0) },
+                        onDragEnded: { onTrimEnded(.leading, $0) },
+                        onRestore: { onTrimRestore(.leading) }
+                    )
+                    Spacer(minLength: 0)
+                    TrimHandle(
+                        edge: .trailing,
+                        onDragChanged: { onTrimChanged(.trailing, $0) },
+                        onDragEnded: { onTrimEnded(.trailing, $0) },
+                        onRestore: { onTrimRestore(.trailing) }
+                    )
+                }
+                .padding(.horizontal, 1)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { vm.selectAudio(chunk.id) }
+        .gesture(
+            DragGesture(minimumDistance: 6, coordinateSpace: .global)
+                .onChanged { value in
+                    onMoveChanged(value.location.x - value.startLocation.x)
+                }
+                .onEnded { value in
+                    onMoveEnded(value.location.x - value.startLocation.x)
+                }
+        )
+        .shadow(color: isSelected ? Theme.speedTint.opacity(0.3) : .clear, radius: 5)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Audio clip \(vm.audioSourceName(for: chunk.sourceID))")
+        .accessibilityHint("Select, drag to move, or use the edge handles to trim")
+    }
+
+    private var waveform: some View {
+        GeometryReader { geo in
+            let count = max(6, min(100, Int(geo.size.width / 4)))
+            HStack(alignment: .center, spacing: 2) {
+                ForEach(0..<count, id: \.self) { index in
+                    let amplitude = 0.18 + abs(sin(Double(index) * 1.73)) * 0.46
+                    Capsule()
+                        .fill(Color.white.opacity(0.22))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: max(2, geo.size.height * amplitude))
+                }
+            }
+            .padding(.horizontal, 3)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .allowsHitTesting(false)
+    }
+}
+
+struct AudioMixInspector: View {
+    @EnvironmentObject var vm: EditorViewModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "waveform")
+                    .foregroundStyle(Theme.speedTint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Audio clip")
+                        .font(.system(size: 12, weight: .semibold))
+                    if let chunk = vm.selectedAudioChunk {
+                        Text(vm.audioSourceName(for: chunk.sourceID))
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer()
+            }
+
+            if let chunk = vm.selectedAudioChunk {
+                controlRow(
+                    title: "Volume",
+                    valueText: "\(Int((Double(chunk.volume) * 100).rounded()))%",
+                    value: Binding(
+                        get: { Double(vm.selectedAudioChunk?.volume ?? 1) },
+                        set: { vm.setSelectedAudioVolume($0) }
+                    ),
+                    range: 0...2
+                )
+                controlRow(
+                    title: "Fade in",
+                    valueText: fadeLabel(chunk.fadeInDuration),
+                    value: Binding(
+                        get: { vm.selectedAudioChunk?.fadeInDuration ?? 0 },
+                        set: { vm.setSelectedAudioFadeIn($0) }
+                    ),
+                    range: 0...max(0.01, vm.maxSelectedAudioFadeDuration)
+                )
+                controlRow(
+                    title: "Fade out",
+                    valueText: fadeLabel(chunk.fadeOutDuration),
+                    value: Binding(
+                        get: { vm.selectedAudioChunk?.fadeOutDuration ?? 0 },
+                        set: { vm.setSelectedAudioFadeOut($0) }
+                    ),
+                    range: 0...max(0.01, vm.maxSelectedAudioFadeDuration)
+                )
+            }
+
+            Divider().overlay(Theme.stroke)
+
+            HStack {
+                Button("Replace…") {
+                    isPresented = false
+                    vm.importAudioPanel()
+                }
+                .buttonStyle(GhostButtonStyle())
+
+                Spacer()
+
+                Button("Remove Track") {
+                    isPresented = false
+                    vm.removeImportedAudio()
+                }
+                .buttonStyle(GhostButtonStyle())
+                .foregroundStyle(Color(hex: 0xFF6B6B))
+            }
+        }
+        .padding(16)
+    }
+
+    private func controlRow(
+        title: String,
+        valueText: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>
+    ) -> some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+                Text(valueText)
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Theme.textPrimary)
+            }
+            Slider(value: value, in: range)
+                .tint(Theme.speedTint)
+        }
+    }
+
+    private func fadeLabel(_ duration: Double) -> String {
+        String(format: "%.1fs", duration)
     }
 }
 

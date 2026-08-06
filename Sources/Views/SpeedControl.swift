@@ -8,7 +8,7 @@ struct SpeedControl: View {
     @State private var customText = ""
 
     private let presets: [Double] = [0.5, 1, 2, 5, 10, 20]
-    private var applyToAll: Bool { vm.selection.isEmpty }
+    private var applyToAll: Bool { !vm.hasAnySelection }
 
     var body: some View {
         Button {
@@ -40,7 +40,7 @@ struct SpeedControl: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
-                Text(applyToAll ? "All clips" : "\(vm.selection.count) selected")
+                Text(applyToAll ? "All video clips" : "\(vm.selectedCount) selected")
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -74,7 +74,7 @@ struct SpeedControl: View {
 
             if !applyToAll {
                 Button { applyCustom(all: true) } label: {
-                    Text("Apply to all clips")
+                    Text(vm.hasAudioSelection ? "Apply to all audio clips" : "Apply to all video clips")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(GhostButtonStyle())

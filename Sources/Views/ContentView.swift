@@ -61,10 +61,14 @@ struct ContentView: View {
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
         _ = provider.loadObject(ofClass: URL.self) { url, _ in
-            guard let url, isVideoFile(url) else { return }
+            guard let url else { return }
             DispatchQueue.main.async {
-                // Append to an open project, otherwise start a new one.
-                if vm.hasContent { vm.importVideo(url: url) } else { vm.openVideo(url: url) }
+                if isVideoFile(url) {
+                    // Append to an open project, otherwise start a new one.
+                    if vm.hasContent { vm.importVideo(url: url) } else { vm.openVideo(url: url) }
+                } else if vm.hasContent, isAudioFile(url) {
+                    vm.importAudio(url: url)
+                }
             }
         }
         return true
@@ -73,5 +77,10 @@ struct ContentView: View {
     private func isVideoFile(_ url: URL) -> Bool {
         guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
         return type.conforms(to: .movie) || type.conforms(to: .video)
+    }
+
+    private func isAudioFile(_ url: URL) -> Bool {
+        guard let type = UTType(filenameExtension: url.pathExtension) else { return false }
+        return type.conforms(to: .audio)
     }
 }
