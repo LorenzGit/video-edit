@@ -155,6 +155,7 @@ final class EditorViewModel: ObservableObject {
 
     private var captureSelectionCoordinator: CaptureSelectionCoordinator?
     private var screenRecorder: ScreenRecorder?
+    private var recordingRegionDimmer: RecordingRegionDimmer?
     private var recordingStatusItem: RecordingStatusItemController?
     private var recordingTimer: Task<Void, Never>?
     private var stopRecordingHotKey: GlobalHotKey?
@@ -246,6 +247,8 @@ final class EditorViewModel: ObservableObject {
         isFinishingRecording = true
         recordingTimer?.cancel()
         recordingTimer = nil
+        recordingRegionDimmer?.close()
+        recordingRegionDimmer = nil
         recordingStatusItem?.setFinishing()
 
         Task {
@@ -291,6 +294,9 @@ final class EditorViewModel: ObservableObject {
                 isPreparingRecording = false
                 isRecording = true
                 recordingElapsed = 0
+                let dimmer = RecordingRegionDimmer()
+                dimmer.show(selection: selection)
+                recordingRegionDimmer = dimmer
                 stopRecordingHotKey = GlobalHotKey(commandEscapeAction: { [weak self] in
                     self?.stopScreenRecording()
                 })
@@ -320,6 +326,8 @@ final class EditorViewModel: ObservableObject {
         recordingTimer?.cancel()
         recordingTimer = nil
         stopRecordingHotKey = nil
+        recordingRegionDimmer?.close()
+        recordingRegionDimmer = nil
         recordingStatusItem?.close()
         recordingStatusItem = nil
         screenRecorder = nil

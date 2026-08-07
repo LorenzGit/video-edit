@@ -952,3 +952,131 @@ private final class CaptureSelectionView: NSView {
         return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 }
+
+/// Keeps the selected recording region visually prominent while capture is
+/// active. These panels belong to Reel, so ScreenCaptureKit excludes them from
+/// the recorded output along with the rest of the app.
+@MainActor
+final class RecordingRegionDimmer {
+    private var panels: [RecordingDimPanel] = []
+
+    func show(selection: ScreenCaptureSelection) {
+        close()
+
+        for screen in NSScreen.screens {
+            guard let displayID = Self.displayID(for: screen) else { continue }
+            let bounds = CGRect(origin: .zero, size: screen.frame.size)
+            let undimmedRect: CGRect?
+            if displayID == selection.displayID {
+                undimmedRect = CGRect(
+                    x: selection.sourceRect.minX,
+                    y: bounds.height - selection.sourceRect.maxY,
+                    width: selection.sourceRect.width,
+                    height: selection.sourceRect.height
+                ).intersection(bounds)
+            } else {
+                undimmedRect = nil
+            }
+
+            let view = RecordingRegionDimView(
+                frame: bounds,
+                undimmedRect: undimmedRect
+            )
+            let panel = RecordingDimPanel(
+                contentRect: bounds,
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false,
+                screen: screen
+            )
+            panel.contentView = view
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.hasShadow = false
+            panel.level = NSWindow.Level(
+                rawValue: NSWindow.Level.mainMenu.rawValue - 1
+            )
+            panel.collectionBehavior = [
+                .canJoinAllSpaces,
+                .fullScreenAuxiliary,
+                .stationary,
+                .ignoresCycle
+            ]
+            panel.hidesOnDeactivate = false
+            panel.ignoresMouseEvents = true
+            panel.isMovable = false
+            panel.orderFrontRegardless()
+            panels.append(panel)
+        }
+    }
+
+    func close() {
+        panels.forEach { $0.orderOut(nil) }
+        panels.removeAll()
+    }
+
+    private static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        return (screen.deviceDescription[key] as? NSNumber).map {
+            CGDirectDisplayID($0.uint32Value)
+        }
+    }
+}
+
+private final class RecordingDimPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+private final class RecordingRegionDimView: NSView {
+    private static let dimOpacity: CGFloat = 0.32
+    private let undimmedRect: CGRect?
+
+    init(frame frameRect: NSRect, undimmedRect: CGRect?) {
+        self.undimmedRect = undimmedRect
+        super.init(frame: frameRect)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isOpaque: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+
+        context.setFillColor(NSColor.black.withAlphaComponent(Self.dimOpacity).cgColor)
+        guard let undimmedRect, !undimmedRect.isNull, !undimmedRect.isEmpty else {
+            context.fill(bounds)
+            return
+        }
+
+        let rect = undimmedRect.intersection(bounds)
+        context.fill(CGRect(
+            x: bounds.minX,
+            y: bounds.minY,
+            width: bounds.width,
+            height: max(0, rect.minY - bounds.minY)
+        ))
+        context.fill(CGRect(
+            x: bounds.minX,
+            y: rect.maxY,
+            width: bounds.width,
+            height: max(0, bounds.maxY - rect.maxY)
+        ))
+        context.fill(CGRect(
+            x: bounds.minX,
+            y: rect.minY,
+            width: max(0, rect.minX - bounds.minX),
+            height: rect.height
+        ))
+        context.fill(CGRect(
+            x: rect.maxX,
+            y: rect.minY,
+            width: max(0, bounds.maxX - rect.maxX),
+            height: rect.height
+        ))
+    }
+}
