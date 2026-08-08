@@ -135,12 +135,168 @@ final class EditorViewModel: ObservableObject {
 
     // MARK: Export
 
+    enum ExportAction: String, Identifiable {
+        case file
+        case clipboard
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .file: "Export Video"
+            case .clipboard: "Copy Video"
+            }
+        }
+
+        var buttonTitle: String {
+            switch self {
+            case .file: "Continue to Save"
+            case .clipboard: "Copy Video"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .file: "square.and.arrow.up"
+            case .clipboard: "doc.on.clipboard"
+            }
+        }
+    }
+
+    enum ExportResolution: String, CaseIterable, Identifiable {
+        case source
+        case scale75
+        case scale50
+        case scale25
+        case ultraHD
+        case fullHD
+        case hd
+        case compact
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .source: "Source"
+            case .scale75: "75% (0.75×)"
+            case .scale50: "50% (0.5×)"
+            case .scale25: "25% (0.25×)"
+            case .ultraHD: "4K"
+            case .fullHD: "1080p"
+            case .hd: "720p"
+            case .compact: "540p"
+            }
+        }
+
+        fileprivate var maximumLandscapeSize: CGSize? {
+            switch self {
+            case .source, .scale75, .scale50, .scale25: nil
+            case .ultraHD: CGSize(width: 3840, height: 2160)
+            case .fullHD: CGSize(width: 1920, height: 1080)
+            case .hd: CGSize(width: 1280, height: 720)
+            case .compact: CGSize(width: 960, height: 540)
+            }
+        }
+
+        fileprivate var scaleFactor: CGFloat? {
+            switch self {
+            case .scale75: 0.75
+            case .scale50: 0.5
+            case .scale25: 0.25
+            default: nil
+            }
+        }
+    }
+
+    enum ExportCompression: String, CaseIterable, Identifiable {
+        case compatible
+        case h264Balanced
+        case h264Compact
+        case efficient
+        case hevcBalanced
+        case hevcCompact
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .compatible: "H.264 — High Quality"
+            case .h264Balanced: "H.264 — Balanced"
+            case .h264Compact: "H.264 — Smaller File"
+            case .efficient: "HEVC — High Quality"
+            case .hevcBalanced: "HEVC — Balanced"
+            case .hevcCompact: "HEVC — Smallest File"
+            }
+        }
+
+        var detail: String {
+            switch self {
+            case .compatible:
+                "Best compatibility with the least compression."
+            case .h264Balanced:
+                "Good quality and compatibility with a smaller H.264 file."
+            case .h264Compact:
+                "More compression for sharing when compatibility matters."
+            case .efficient:
+                "High visual quality with more efficient HEVC compression."
+            case .hevcBalanced:
+                "A strong quality-to-size balance for modern apps and devices."
+            case .hevcCompact:
+                "The smallest files; older apps may not support HEVC."
+            }
+        }
+
+        fileprivate var codec: AVVideoCodecType {
+            switch self {
+            case .compatible, .h264Balanced, .h264Compact: .h264
+            case .efficient, .hevcBalanced, .hevcCompact: .hevc
+            }
+        }
+
+        fileprivate var bitsPerPixelPerFrame: Double {
+            switch self {
+            case .compatible: 0.12
+            case .h264Balanced: 0.075
+            case .h264Compact: 0.045
+            case .efficient: 0.08
+            case .hevcBalanced: 0.05
+            case .hevcCompact: 0.03
+            }
+        }
+
+        fileprivate var audioBitRate: Int {
+            switch self {
+            case .compatible, .efficient: 192_000
+            case .h264Balanced, .hevcBalanced: 160_000
+            case .h264Compact, .hevcCompact: 128_000
+            }
+        }
+
+        fileprivate func videoBitRate(for size: CGSize, frameRate: Double) -> Int {
+            let pixels = max(1, Double(size.width * size.height))
+            let estimate = Int(pixels * max(1, frameRate) * bitsPerPixelPerFrame)
+            return min(max(estimate, 250_000), 100_000_000)
+        }
+    }
+
     @Published var isExporting = false
     @Published var exportProgress: Double = 0
     @Published private(set) var exportProgressTitle = "Exporting MP4"
     @Published private(set) var exportProgressIcon = "square.and.arrow.up"
     @Published var statusMessage: String?
+    @Published var pendingExportAction: ExportAction?
+    @Published var exportResolution: ExportResolution = ExportResolution(
+        rawValue: UserDefaults.standard.string(forKey: "exportResolution") ?? ""
+    ) ?? .source {
+        didSet { UserDefaults.standard.set(exportResolution.rawValue, forKey: "exportResolution") }
+    }
+    @Published var exportCompression: ExportCompression = ExportCompression(
+        rawValue: UserDefaults.standard.string(forKey: "exportCompression") ?? ""
+    ) ?? .compatible {
+        didSet { UserDefaults.standard.set(exportCompression.rawValue, forKey: "exportCompression") }
+    }
     private var clipboardVideoURL: URL?
+    private var confirmedExportAction: ExportAction?
 
     private let timescale: CMTimeScale = 600
 
@@ -586,7 +742,7 @@ final class EditorViewModel: ObservableObject {
 
     /// Builds the edited timeline as a composition plus a video composition that
     /// places each source (whatever its size/orientation) into a common frame.
-    private func buildComposition() -> (
+    private func buildComposition(outputResolution: ExportResolution = .source) -> (
         composition: AVMutableComposition,
         video: AVMutableVideoComposition,
         audioMix: AVAudioMix?
@@ -601,7 +757,7 @@ final class EditorViewModel: ObservableObject {
             ? comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
             : nil
 
-        let renderSize = evenSize(firstSource.naturalSize)
+        let renderSize = exportSize(for: firstSource.naturalSize, resolution: outputResolution)
         var cursor = CMTime.zero
         var instructions: [AVMutableVideoCompositionInstruction] = []
 
@@ -738,6 +894,22 @@ final class EditorViewModel: ObservableObject {
         let w = max(2, (Int(size.width.rounded()) / 2) * 2)
         let h = max(2, (Int(size.height.rounded()) / 2) * 2)
         return CGSize(width: w, height: h)
+    }
+
+    private func exportSize(for sourceSize: CGSize, resolution: ExportResolution) -> CGSize {
+        let source = evenSize(sourceSize)
+        if let scaleFactor = resolution.scaleFactor {
+            return evenSize(
+                CGSize(width: source.width * scaleFactor, height: source.height * scaleFactor)
+            )
+        }
+        guard let landscapeMaximum = resolution.maximumLandscapeSize else { return source }
+
+        let maximum = source.width >= source.height
+            ? landscapeMaximum
+            : CGSize(width: landscapeMaximum.height, height: landscapeMaximum.width)
+        let scale = min(1, maximum.width / source.width, maximum.height / source.height)
+        return evenSize(CGSize(width: source.width * scale, height: source.height * scale))
     }
 
     private func rebuild(seekTo time: Double? = nil) {
@@ -1437,22 +1609,88 @@ final class EditorViewModel: ObservableObject {
     func export() {
         guard hasContent else { statusMessage = "Nothing to export."; return }
         guard !isExporting else { return }
+        pendingExportAction = .file
+    }
+
+    func copyVideo() {
+        guard hasContent else { statusMessage = "Nothing to copy."; return }
+        guard !isExporting else { return }
+        pendingExportAction = .clipboard
+    }
+
+    func confirmExportOptions(
+        for action: ExportAction,
+        resolution: ExportResolution,
+        compression: ExportCompression
+    ) {
+        guard pendingExportAction == action else { return }
+        exportResolution = resolution
+        exportCompression = compression
+        confirmedExportAction = action
+        pendingExportAction = nil
+    }
+
+    func cancelExportOptions() {
+        confirmedExportAction = nil
+        pendingExportAction = nil
+    }
+
+    /// Called after the settings sheet has fully closed so its Save panel does
+    /// not compete with SwiftUI's sheet dismissal animation.
+    func performConfirmedExportIfNeeded() {
+        guard let action = confirmedExportAction else { return }
+        confirmedExportAction = nil
+        let resolution = exportResolution
+        let compression = exportCompression
+
+        switch action {
+        case .file:
+            chooseExportDestination(resolution: resolution, compression: compression)
+        case .clipboard:
+            prepareClipboardExport(resolution: resolution, compression: compression)
+        }
+    }
+
+    func exportDimensions(for resolution: ExportResolution) -> String {
+        guard let first = chunks.first, let source = sources[first.sourceID] else { return "—" }
+        let size = exportSize(for: source.naturalSize, resolution: resolution)
+        return "\(Int(size.width)) × \(Int(size.height))"
+    }
+
+    private func chooseExportDestination(
+        resolution: ExportResolution,
+        compression: ExportCompression
+    ) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.mpeg4Movie]
         panel.nameFieldStringValue = defaultExportName()
         panel.canCreateDirectories = true
         panel.title = "Export Video"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await runExport(to: url, destination: .file) }
+        Task {
+            await runExport(
+                to: url,
+                destination: .file,
+                resolution: resolution,
+                compression: compression
+            )
+        }
     }
 
-    func copyVideo() {
-        guard hasContent else { statusMessage = "Nothing to copy."; return }
-        guard !isExporting else { return }
-
+    private func prepareClipboardExport(
+        resolution: ExportResolution,
+        compression: ExportCompression
+    ) {
         do {
             let url = try makeClipboardExportURL()
-            Task { await runExport(to: url, destination: .clipboard) }
+            Task {
+                await runExport(
+                    to: url,
+                    destination: .clipboard,
+                    resolution: resolution,
+                    compression: compression
+                )
+            }
         } catch {
             statusMessage = "Couldn't prepare the clipboard copy: \(error.localizedDescription)"
         }
@@ -1464,31 +1702,17 @@ final class EditorViewModel: ObservableObject {
         return "\(trimmed.isEmpty ? "Untitled" : trimmed)-edited.mp4"
     }
 
-    private enum ExportDestination {
-        case file
-        case clipboard
-    }
-
-    private func runExport(to url: URL, destination: ExportDestination) async {
-        guard let built = buildComposition() else {
+    private func runExport(
+        to url: URL,
+        destination: ExportAction,
+        resolution: ExportResolution,
+        compression: ExportCompression
+    ) async {
+        guard let built = buildComposition(outputResolution: resolution) else {
             statusMessage = "Couldn't prepare the export."
             discardClipboardStagingFileIfNeeded(at: url, destination: destination)
             return
         }
-        guard let session = AVAssetExportSession(
-            asset: built.composition, presetName: AVAssetExportPresetHighestQuality
-        ) else {
-            statusMessage = "Export isn't supported for this video."
-            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
-            return
-        }
-
-        try? FileManager.default.removeItem(at: url)
-        session.outputURL = url
-        session.outputFileType = .mp4
-        session.videoComposition = built.video
-        session.audioMix = built.audioMix
-        session.audioTimePitchAlgorithm = .spectral
 
         if isPlaying { player.pause(); isPlaying = false }
         switch destination {
@@ -1503,24 +1727,30 @@ final class EditorViewModel: ObservableObject {
         exportProgress = 0
         statusMessage = nil
 
-        let progressTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                self.exportProgress = Double(session.progress)
-                let status = session.status
-                if status == .completed || status == .failed || status == .cancelled { break }
-                try? await Task.sleep(nanoseconds: 120_000_000)
+        let frameRate = 1 / max(built.video.frameDuration.seconds, 1.0 / 120.0)
+        let videoBitRate = compression.videoBitRate(
+            for: built.video.renderSize,
+            frameRate: frameRate
+        )
+
+        do {
+            try await VideoExporter.export(
+                asset: built.composition,
+                videoComposition: built.video,
+                audioMix: built.audioMix,
+                outputURL: url,
+                codec: compression.codec,
+                averageVideoBitRate: videoBitRate,
+                averageAudioBitRate: compression.audioBitRate,
+                frameRate: frameRate
+            ) { [weak self] progress in
+                Task { @MainActor [weak self] in
+                    guard let self, self.isExporting else { return }
+                    self.exportProgress = progress
+                }
             }
-        }
 
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            session.exportAsynchronously { continuation.resume() }
-        }
-        progressTask.cancel()
-
-        isExporting = false
-        switch session.status {
-        case .completed:
+            isExporting = false
             exportProgress = 1
             switch destination {
             case .file:
@@ -1534,15 +1764,11 @@ final class EditorViewModel: ObservableObject {
                     statusMessage = "Couldn't place the video on the clipboard."
                 }
             }
-        case .failed:
+        } catch {
+            isExporting = false
+            try? FileManager.default.removeItem(at: url)
             discardClipboardStagingFileIfNeeded(at: url, destination: destination)
-            statusMessage = "Export failed: \(session.error?.localizedDescription ?? "unknown error")"
-        case .cancelled:
-            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
-            statusMessage = "Export cancelled."
-        default:
-            discardClipboardStagingFileIfNeeded(at: url, destination: destination)
-            statusMessage = "Export ended unexpectedly."
+            statusMessage = "Export failed: \(error.localizedDescription)"
         }
     }
 
@@ -1572,7 +1798,7 @@ final class EditorViewModel: ObservableObject {
 
     private func discardClipboardStagingFileIfNeeded(
         at url: URL,
-        destination: ExportDestination
+        destination: ExportAction
     ) {
         if case .clipboard = destination {
             discardClipboardStagingFile(at: url)

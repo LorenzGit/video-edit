@@ -36,7 +36,9 @@ does the handful of things I actually need and nothing else.
 - **Undo / Redo** every edit.
 - **Preview & scrub** with a zoomable timeline — what you preview is exactly what
   you export.
-- **Export** to **MP4**, or **Copy** the edited video directly to the clipboard.
+- **Export** to **MP4**, or **Copy** the edited video directly to the clipboard,
+  with shared fixed-resolution or 75% / 50% / 25% resize options and six H.264
+  / HEVC compression levels.
 
 That's the whole app. No accounts, no cloud, no watermark.
 
@@ -165,7 +167,7 @@ Sources/
   ViewModels/  EditorViewModel.swift                (player, edits, undo, export)
   Views/       ContentView, PreviewSection, TransportBar, ControlBar, SpeedControl,
                TimelineView, EmptyStateView, ExportOverlay, StatusToast
-  Support/     Theme.swift, Formatting.swift        (styling + helpers)
+  Support/     Theme, Formatting, VideoExporter     (styling + export helpers)
 ```
 
 The timeline is horizontally scrollable and zoomable; muting video audio drops

@@ -34,6 +34,16 @@ struct ContentView: View {
         }
         .frame(minWidth: 720, minHeight: 600)
         .preferredColorScheme(.dark)
+        .sheet(item: $vm.pendingExportAction, onDismiss: {
+            vm.performConfirmedExportIfNeeded()
+        }) { action in
+            ExportSettingsSheet(
+                action: action,
+                resolution: vm.exportResolution,
+                compression: vm.exportCompression
+            )
+                .environmentObject(vm)
+        }
         .overlay(alignment: .bottom) {
             if let message = vm.statusMessage, vm.sourceURL != nil, !vm.isExporting {
                 StatusToast(message: message)

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		00587E11D314C5F0D87EA2D0 /* ReelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A2CA18FA83504F4DFF78FD /* ReelApp.swift */; };
 		0A03181BB25A62917D7367AD /* ExportOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42C265897BBCD575B88FEFB /* ExportOverlay.swift */; };
+		0A0ACD9EDCEC61732DE0D615 /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65C4FFA3ED7E8D3FEB6E38AB /* VideoExporter.swift */; };
 		0FD762D862FA0CFF8A64FD62 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E2161CA312908D0FC9EA3B /* ContentView.swift */; };
 		2030E395E9C04D87B46014DF /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C0BDEC1B15FD694A7D63A2 /* EditorViewModel.swift */; };
 		31432A8B45F9C1BAAAEEB25D /* StatusToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E6DD3B8EE9C5D126EFB465 /* StatusToast.swift */; };
@@ -35,6 +36,7 @@
 		512D43709E6FA83E25741890 /* ControlBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
 		56E6DD3B8EE9C5D126EFB465 /* StatusToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusToast.swift; sourceTree = "<group>"; };
 		5DD74B2C8ECACBA281C329CC /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
+		65C4FFA3ED7E8D3FEB6E38AB /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
 		696B0B77025CF970B1A47688 /* CaptureSelectionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSelectionCoordinator.swift; sourceTree = "<group>"; };
 		78E5D8FD36ECAA2076A856CC /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		7AFFE519CD9907A6053C68A5 /* ImportedAudioTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportedAudioTrack.swift; sourceTree = "<group>"; };
@@ -91,6 +93,7 @@
 			children = (
 				ADB16497C1C42290F9504FD2 /* Formatting.swift */,
 				A12F9B2BB930F78A556966CC /* Theme.swift */,
+				65C4FFA3ED7E8D3FEB6E38AB /* VideoExporter.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -238,6 +241,7 @@
 				8AEC86749042D017A40A2AE6 /* Theme.swift in Sources */,
 				6516ACEC10DAA77B98CBB19D /* TimelineView.swift in Sources */,
 				3AD18B6DD7A479D451AA1CAB /* TransportBar.swift in Sources */,
+				0A0ACD9EDCEC61732DE0D615 /* VideoExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,7 +254,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Generated/Info.plist;
@@ -259,7 +263,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.reel;
 				PRODUCT_NAME = Reel;
 				SDKROOT = macosx;
@@ -392,7 +396,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = Generated/Info.plist;
@@ -401,7 +405,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.4;
+				MARKETING_VERSION = 1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.reel;
 				PRODUCT_NAME = Reel;
 				SDKROOT = macosx;
