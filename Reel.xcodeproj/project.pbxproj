@@ -9,52 +9,104 @@
 /* Begin PBXBuildFile section */
 		00587E11D314C5F0D87EA2D0 /* ReelApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A2CA18FA83504F4DFF78FD /* ReelApp.swift */; };
 		0A03181BB25A62917D7367AD /* ExportOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C42C265897BBCD575B88FEFB /* ExportOverlay.swift */; };
-		0A0ACD9EDCEC61732DE0D615 /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65C4FFA3ED7E8D3FEB6E38AB /* VideoExporter.swift */; };
+		0AA10B87CAFF8C7154C79864 /* VideoFraming.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDEDC806044DA5CBC8EBC6FC /* VideoFraming.swift */; };
 		0FD762D862FA0CFF8A64FD62 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E2161CA312908D0FC9EA3B /* ContentView.swift */; };
-		2030E395E9C04D87B46014DF /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90C0BDEC1B15FD694A7D63A2 /* EditorViewModel.swift */; };
+		2FD8523D7E39A9937AEEF755 /* PhotoImportLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E794D710432AABEA5372464E /* PhotoImportLoader.swift */; };
 		31432A8B45F9C1BAAAEEB25D /* StatusToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56E6DD3B8EE9C5D126EFB465 /* StatusToast.swift */; };
+		325E5180E050AA4497583F32 /* MobileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBCFF8E5D0796E57752B0093 /* MobileEditorView.swift */; };
+		3307E5C7B2D132AFED29B0FC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D160434C840D9E1D634D0616 /* Assets.xcassets */; };
+		33FFB5766CE9DD893D98FA3E /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353495BE5E0A45D81699448F /* VideoExporter.swift */; };
+		38E9F943810542D985C42D52 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74BA3707B2C1BEA283585880 /* Formatting.swift */; };
 		3AD18B6DD7A479D451AA1CAB /* TransportBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A0AB4886CBBA76222EDDDE8 /* TransportBar.swift */; };
-		3CBF2BF8C038EE37CF34C248 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADB16497C1C42290F9504FD2 /* Formatting.swift */; };
 		4F421D57D7F4ED2ED5B11056 /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCB39F96F24C7BCA733D4272 /* GlobalHotKey.swift */; };
+		56E894A3AB410E5586ADA94C /* MobileEditorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD3F3F0CE7EEF4AB7AC5757 /* MobileEditorUITests.swift */; };
+		64EDC1140E8AF2F8B1683F49 /* MobileFramingEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73D24D7EB9477BAADE56ACB4 /* MobileFramingEditor.swift */; };
 		6516ACEC10DAA77B98CBB19D /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E5D8FD36ECAA2076A856CC /* TimelineView.swift */; };
-		752661631F3364F55CD6C6B6 /* ImportedAudioTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AFFE519CD9907A6053C68A5 /* ImportedAudioTrack.swift */; };
+		66FCED2314296C495D3B311D /* MobileTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E15D47D54DF4B6FC6864BA91 /* MobileTimelineView.swift */; };
+		6FB41C2E53EC9FE101CAB820 /* ReelMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CB4D8A90F7DC57DFA84BF4 /* ReelMobileApp.swift */; };
 		7FF366C3EB02034506CFA0EF /* ScreenRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA6BE3291EDEED847B598A6 /* ScreenRecorder.swift */; };
 		8AEC86749042D017A40A2AE6 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12F9B2BB930F78A556966CC /* Theme.swift */; };
 		9C90682BC1782768EA148469 /* AppCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DD74B2C8ECACBA281C329CC /* AppCommands.swift */; };
 		9EB4CA868B1B6B42E0A3E35C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DB633CF6CFF02E3C1861F63B /* Assets.xcassets */; };
+		9F5863548642067CBD6E725F /* Chunk.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B605F92D02F1AA215824AF /* Chunk.swift */; };
+		9FF440407E8075C03C0C1413 /* MobileTestVideo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E54CEAD5C223BCC97778913 /* MobileTestVideo.swift */; };
+		A2CDF3586C145204516C9FFC /* EditorIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F483DFAE216E92DFE88744C2 /* EditorIntegrationTests.swift */; };
+		A5DDEEB362F694E240763598 /* Chunk.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B605F92D02F1AA215824AF /* Chunk.swift */; };
 		AC071BB60CAD5777B2A72EA1 /* PreviewSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C09D5FB3870CE5B401B28C53 /* PreviewSection.swift */; };
-		BEFFA23E91811204D8064735 /* Chunk.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81482E72C9BAF48521E6243C /* Chunk.swift */; };
+		AD55FF6FCFECF83169DA9325 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081B36C6671AC2AABDFF1E38 /* EditorViewModel.swift */; };
+		BA5ED1260255DF4DA2481152 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A12F9B2BB930F78A556966CC /* Theme.swift */; };
+		BC77CB2162888407EB560610 /* VideoFraming.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDEDC806044DA5CBC8EBC6FC /* VideoFraming.swift */; };
+		C650B5E58C12711380A7D6B2 /* AudioWaveform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAF57EA9E9F2906A55C7C56 /* AudioWaveform.swift */; };
+		CFFEC962A5470F8C6CC4C5DC /* ImportedAudioTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01B13A62D9CEDDA7F939483E /* ImportedAudioTrack.swift */; };
 		D148F856D32527E7D329A08D /* EmptyStateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69537FC293C41148AEBD637 /* EmptyStateView.swift */; };
 		D3804F85619BCDB5CB6B3946 /* CaptureSelectionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 696B0B77025CF970B1A47688 /* CaptureSelectionCoordinator.swift */; };
+		D696736452BC33D93C1EEE63 /* AudioGainEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CC76AEF0949455D4CE82A2 /* AudioGainEnvelope.swift */; };
+		DCD29B2CB8320A7AD0E4329B /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74BA3707B2C1BEA283585880 /* Formatting.swift */; };
+		DD4894BD9F7068BB42F4D436 /* VideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353495BE5E0A45D81699448F /* VideoExporter.swift */; };
 		DDFA14A43013EE5B13684F12 /* ControlBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 512D43709E6FA83E25741890 /* ControlBar.swift */; };
 		E2A67FC0E3644721ED624045 /* RecordingStatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9493B23CFCACA29810DEF11A /* RecordingStatusItemController.swift */; };
+		EC5BAF1850BC744550FDB0D8 /* AudioGainEnvelope.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CC76AEF0949455D4CE82A2 /* AudioGainEnvelope.swift */; };
 		ED6670EFC190EDFFCF51FBF9 /* SpeedControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC30E6A3D20A7411FCD4F4FB /* SpeedControl.swift */; };
+		F51CA650521936026302E773 /* ImportedAudioTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01B13A62D9CEDDA7F939483E /* ImportedAudioTrack.swift */; };
+		F6D1BAC7DA3D8EDA1BC6F672 /* EditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081B36C6671AC2AABDFF1E38 /* EditorViewModel.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		80EACBA32F23B7CF3E093674 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 84AF5AEA544872A41B60E0B2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 41373B640D9DF06FC279C453;
+			remoteInfo = ReelMobile;
+		};
+		B9B1D22F6784A05D56B98D9C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 84AF5AEA544872A41B60E0B2 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 41373B640D9DF06FC279C453;
+			remoteInfo = ReelMobile;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		01B13A62D9CEDDA7F939483E /* ImportedAudioTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportedAudioTrack.swift; sourceTree = "<group>"; };
+		081B36C6671AC2AABDFF1E38 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
+		0DAF57EA9E9F2906A55C7C56 /* AudioWaveform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioWaveform.swift; sourceTree = "<group>"; };
+		12051739C469B4E5FF9C2AC3 /* ReelMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ReelMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19E2161CA312908D0FC9EA3B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1FD3F3F0CE7EEF4AB7AC5757 /* MobileEditorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorUITests.swift; sourceTree = "<group>"; };
+		353495BE5E0A45D81699448F /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
+		40CB4D8A90F7DC57DFA84BF4 /* ReelMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelMobileApp.swift; sourceTree = "<group>"; };
+		4E54CEAD5C223BCC97778913 /* MobileTestVideo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTestVideo.swift; sourceTree = "<group>"; };
 		512D43709E6FA83E25741890 /* ControlBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlBar.swift; sourceTree = "<group>"; };
 		56E6DD3B8EE9C5D126EFB465 /* StatusToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusToast.swift; sourceTree = "<group>"; };
 		5DD74B2C8ECACBA281C329CC /* AppCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommands.swift; sourceTree = "<group>"; };
-		65C4FFA3ED7E8D3FEB6E38AB /* VideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoExporter.swift; sourceTree = "<group>"; };
 		696B0B77025CF970B1A47688 /* CaptureSelectionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSelectionCoordinator.swift; sourceTree = "<group>"; };
+		73D24D7EB9477BAADE56ACB4 /* MobileFramingEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileFramingEditor.swift; sourceTree = "<group>"; };
+		74BA3707B2C1BEA283585880 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		78E5D8FD36ECAA2076A856CC /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
-		7AFFE519CD9907A6053C68A5 /* ImportedAudioTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImportedAudioTrack.swift; sourceTree = "<group>"; };
-		81482E72C9BAF48521E6243C /* Chunk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chunk.swift; sourceTree = "<group>"; };
 		8A0AB4886CBBA76222EDDDE8 /* TransportBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportBar.swift; sourceTree = "<group>"; };
-		90C0BDEC1B15FD694A7D63A2 /* EditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorViewModel.swift; sourceTree = "<group>"; };
 		9493B23CFCACA29810DEF11A /* RecordingStatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingStatusItemController.swift; sourceTree = "<group>"; };
 		A12F9B2BB930F78A556966CC /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
-		ADB16497C1C42290F9504FD2 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
+		A6FA065F945C1A221C161298 /* ReelMobileUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ReelMobileUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8B605F92D02F1AA215824AF /* Chunk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Chunk.swift; sourceTree = "<group>"; };
 		C09D5FB3870CE5B401B28C53 /* PreviewSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSection.swift; sourceTree = "<group>"; };
 		C42C265897BBCD575B88FEFB /* ExportOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportOverlay.swift; sourceTree = "<group>"; };
 		C7C4CAA7CFF687FF8B6724FD /* Reel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Reel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC30E6A3D20A7411FCD4F4FB /* SpeedControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeedControl.swift; sourceTree = "<group>"; };
+		D160434C840D9E1D634D0616 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DB633CF6CFF02E3C1861F63B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E15D47D54DF4B6FC6864BA91 /* MobileTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTimelineView.swift; sourceTree = "<group>"; };
+		E21261045AEAE6B319F740A7 /* ReelMobileTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ReelMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E3CC76AEF0949455D4CE82A2 /* AudioGainEnvelope.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioGainEnvelope.swift; sourceTree = "<group>"; };
+		E794D710432AABEA5372464E /* PhotoImportLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoImportLoader.swift; sourceTree = "<group>"; };
+		EBCFF8E5D0796E57752B0093 /* MobileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorView.swift; sourceTree = "<group>"; };
+		F483DFAE216E92DFE88744C2 /* EditorIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorIntegrationTests.swift; sourceTree = "<group>"; };
 		F69537FC293C41148AEBD637 /* EmptyStateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmptyStateView.swift; sourceTree = "<group>"; };
 		F7A2CA18FA83504F4DFF78FD /* ReelApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelApp.swift; sourceTree = "<group>"; };
 		FCA6BE3291EDEED847B598A6 /* ScreenRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecorder.swift; sourceTree = "<group>"; };
 		FCB39F96F24C7BCA733D4272 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
+		FDEDC806044DA5CBC8EBC6FC /* VideoFraming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFraming.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -63,10 +115,8 @@
 			children = (
 				DB633CF6CFF02E3C1861F63B /* Assets.xcassets */,
 				694C77E9C0A933C753C42CE3 /* App */,
-				E8D080BE1E87086C68AEDE87 /* Models */,
 				8E748F0C56DD99FF6E2E7E7D /* Recording */,
 				4CB1CB439E2EF90C04A42C32 /* Support */,
-				4E26786E9BBD09CC26834AC8 /* ViewModels */,
 				0208E8855D9D8EF962263A4F /* Views */,
 			);
 			path = Sources;
@@ -88,28 +138,39 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		4CB1CB439E2EF90C04A42C32 /* Support */ = {
+		1308783AB79790AA744D807D /* Support */ = {
 			isa = PBXGroup;
 			children = (
-				ADB16497C1C42290F9504FD2 /* Formatting.swift */,
-				A12F9B2BB930F78A556966CC /* Theme.swift */,
-				65C4FFA3ED7E8D3FEB6E38AB /* VideoExporter.swift */,
+				E3CC76AEF0949455D4CE82A2 /* AudioGainEnvelope.swift */,
+				74BA3707B2C1BEA283585880 /* Formatting.swift */,
+				353495BE5E0A45D81699448F /* VideoExporter.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
 		};
-		4E26786E9BBD09CC26834AC8 /* ViewModels */ = {
+		3363CB1862AB4B1BB09A0E33 /* Editing */ = {
 			isa = PBXGroup;
 			children = (
-				90C0BDEC1B15FD694A7D63A2 /* EditorViewModel.swift */,
+				081B36C6671AC2AABDFF1E38 /* EditorViewModel.swift */,
 			);
-			path = ViewModels;
+			path = Editing;
+			sourceTree = "<group>";
+		};
+		4CB1CB439E2EF90C04A42C32 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				A12F9B2BB930F78A556966CC /* Theme.swift */,
+			);
+			path = Support;
 			sourceTree = "<group>";
 		};
 		597D16B9415AD7613251088A = {
 			isa = PBXGroup;
 			children = (
+				A4D5C1990801EDE3AAE4C969 /* iOS */,
+				7602D2A28766A042175795ED /* Shared */,
 				00F36DADE9D42B77B09D7E2E /* Sources */,
+				CF1562A15EF27D0A3B33FEE1 /* Tests */,
 				9330200A569ED5477874D824 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,6 +182,24 @@
 				F7A2CA18FA83504F4DFF78FD /* ReelApp.swift */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		7602D2A28766A042175795ED /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				3363CB1862AB4B1BB09A0E33 /* Editing */,
+				C7318087C13C59F288155BD6 /* Models */,
+				1308783AB79790AA744D807D /* Support */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		7CB25D4E1805FBEB7F166DAA /* iOSUI */ = {
+			isa = PBXGroup;
+			children = (
+				1FD3F3F0CE7EEF4AB7AC5757 /* MobileEditorUITests.swift */,
+			);
+			path = iOSUI;
 			sourceTree = "<group>";
 		};
 		8E748F0C56DD99FF6E2E7E7D /* Recording */ = {
@@ -138,22 +217,94 @@
 			isa = PBXGroup;
 			children = (
 				C7C4CAA7CFF687FF8B6724FD /* Reel.app */,
+				12051739C469B4E5FF9C2AC3 /* ReelMobile.app */,
+				E21261045AEAE6B319F740A7 /* ReelMobileTests.xctest */,
+				A6FA065F945C1A221C161298 /* ReelMobileUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		E8D080BE1E87086C68AEDE87 /* Models */ = {
+		A4D5C1990801EDE3AAE4C969 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				81482E72C9BAF48521E6243C /* Chunk.swift */,
-				7AFFE519CD9907A6053C68A5 /* ImportedAudioTrack.swift */,
+				D160434C840D9E1D634D0616 /* Assets.xcassets */,
+				0DAF57EA9E9F2906A55C7C56 /* AudioWaveform.swift */,
+				EBCFF8E5D0796E57752B0093 /* MobileEditorView.swift */,
+				73D24D7EB9477BAADE56ACB4 /* MobileFramingEditor.swift */,
+				4E54CEAD5C223BCC97778913 /* MobileTestVideo.swift */,
+				E15D47D54DF4B6FC6864BA91 /* MobileTimelineView.swift */,
+				E794D710432AABEA5372464E /* PhotoImportLoader.swift */,
+				40CB4D8A90F7DC57DFA84BF4 /* ReelMobileApp.swift */,
+			);
+			path = iOS;
+			sourceTree = "<group>";
+		};
+		C7318087C13C59F288155BD6 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A8B605F92D02F1AA215824AF /* Chunk.swift */,
+				01B13A62D9CEDDA7F939483E /* ImportedAudioTrack.swift */,
+				FDEDC806044DA5CBC8EBC6FC /* VideoFraming.swift */,
 			);
 			path = Models;
+			sourceTree = "<group>";
+		};
+		CF1562A15EF27D0A3B33FEE1 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				DA1CB085CEF4754830D95F76 /* iOS */,
+				7CB25D4E1805FBEB7F166DAA /* iOSUI */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		DA1CB085CEF4754830D95F76 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				F483DFAE216E92DFE88744C2 /* EditorIntegrationTests.swift */,
+			);
+			path = iOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		1FFBD6BF664191B30A3FBFB0 /* ReelMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 972494CDE9D25ACB99F5871E /* Build configuration list for PBXNativeTarget "ReelMobileTests" */;
+			buildPhases = (
+				241B6042303AF9B4A6A0B0C6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				15DCB66D63BC27D43662EAE4 /* PBXTargetDependency */,
+			);
+			name = ReelMobileTests;
+			packageProductDependencies = (
+			);
+			productName = ReelMobileTests;
+			productReference = E21261045AEAE6B319F740A7 /* ReelMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		41373B640D9DF06FC279C453 /* ReelMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 35AFC8FD2360A31BF44C6B43 /* Build configuration list for PBXNativeTarget "ReelMobile" */;
+			buildPhases = (
+				DCA4A2893BDB5AD42EAE530D /* Sources */,
+				516BE3F0A9961D035C807EFC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ReelMobile;
+			packageProductDependencies = (
+			);
+			productName = ReelMobile;
+			productReference = 12051739C469B4E5FF9C2AC3 /* ReelMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
 		AFB5673E269C151D7CEC1FE4 /* Reel */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 34EAC9EDAFD0C8000CD3C24D /* Build configuration list for PBXNativeTarget "Reel" */;
@@ -172,6 +323,24 @@
 			productReference = C7C4CAA7CFF687FF8B6724FD /* Reel.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C554CB758ABC84C07ADE26AB /* ReelMobileUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 48ACC98280EDF92DC8C05B99 /* Build configuration list for PBXNativeTarget "ReelMobileUITests" */;
+			buildPhases = (
+				1CCCBAF0E69CFA2AA3E4FF22 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2FE62F8F2889C1999527A397 /* PBXTargetDependency */,
+			);
+			name = ReelMobileUITests;
+			packageProductDependencies = (
+			);
+			productName = ReelMobileUITests;
+			productReference = A6FA065F945C1A221C161298 /* ReelMobileUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -181,13 +350,18 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					41373B640D9DF06FC279C453 = {
+						ProvisioningStyle = Automatic;
+					};
 					AFB5673E269C151D7CEC1FE4 = {
 						ProvisioningStyle = Automatic;
+					};
+					C554CB758ABC84C07ADE26AB = {
+						TestTargetID = 41373B640D9DF06FC279C453;
 					};
 				};
 			};
 			buildConfigurationList = EE787DA360354CF0E26195FE /* Build configuration list for PBXProject "Reel" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -197,15 +371,27 @@
 			mainGroup = 597D16B9415AD7613251088A;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = 9330200A569ED5477874D824 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				AFB5673E269C151D7CEC1FE4 /* Reel */,
+				41373B640D9DF06FC279C453 /* ReelMobile */,
+				1FFBD6BF664191B30A3FBFB0 /* ReelMobileTests */,
+				C554CB758ABC84C07ADE26AB /* ReelMobileUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		516BE3F0A9961D035C807EFC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3307E5C7B2D132AFED29B0FC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8110BED88016EA24E1F868EA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -217,21 +403,38 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		1CCCBAF0E69CFA2AA3E4FF22 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				56E894A3AB410E5586ADA94C /* MobileEditorUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		241B6042303AF9B4A6A0B0C6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2CDF3586C145204516C9FFC /* EditorIntegrationTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AA56224B0DA68CFAC14168A4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				9C90682BC1782768EA148469 /* AppCommands.swift in Sources */,
+				EC5BAF1850BC744550FDB0D8 /* AudioGainEnvelope.swift in Sources */,
 				D3804F85619BCDB5CB6B3946 /* CaptureSelectionCoordinator.swift in Sources */,
-				BEFFA23E91811204D8064735 /* Chunk.swift in Sources */,
+				9F5863548642067CBD6E725F /* Chunk.swift in Sources */,
 				0FD762D862FA0CFF8A64FD62 /* ContentView.swift in Sources */,
 				DDFA14A43013EE5B13684F12 /* ControlBar.swift in Sources */,
-				2030E395E9C04D87B46014DF /* EditorViewModel.swift in Sources */,
+				F6D1BAC7DA3D8EDA1BC6F672 /* EditorViewModel.swift in Sources */,
 				D148F856D32527E7D329A08D /* EmptyStateView.swift in Sources */,
 				0A03181BB25A62917D7367AD /* ExportOverlay.swift in Sources */,
-				3CBF2BF8C038EE37CF34C248 /* Formatting.swift in Sources */,
+				DCD29B2CB8320A7AD0E4329B /* Formatting.swift in Sources */,
 				4F421D57D7F4ED2ED5B11056 /* GlobalHotKey.swift in Sources */,
-				752661631F3364F55CD6C6B6 /* ImportedAudioTrack.swift in Sources */,
+				F51CA650521936026302E773 /* ImportedAudioTrack.swift in Sources */,
 				AC071BB60CAD5777B2A72EA1 /* PreviewSection.swift in Sources */,
 				E2A67FC0E3644721ED624045 /* RecordingStatusItemController.swift in Sources */,
 				00587E11D314C5F0D87EA2D0 /* ReelApp.swift in Sources */,
@@ -241,11 +444,47 @@
 				8AEC86749042D017A40A2AE6 /* Theme.swift in Sources */,
 				6516ACEC10DAA77B98CBB19D /* TimelineView.swift in Sources */,
 				3AD18B6DD7A479D451AA1CAB /* TransportBar.swift in Sources */,
-				0A0ACD9EDCEC61732DE0D615 /* VideoExporter.swift in Sources */,
+				33FFB5766CE9DD893D98FA3E /* VideoExporter.swift in Sources */,
+				0AA10B87CAFF8C7154C79864 /* VideoFraming.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DCA4A2893BDB5AD42EAE530D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D696736452BC33D93C1EEE63 /* AudioGainEnvelope.swift in Sources */,
+				C650B5E58C12711380A7D6B2 /* AudioWaveform.swift in Sources */,
+				A5DDEEB362F694E240763598 /* Chunk.swift in Sources */,
+				AD55FF6FCFECF83169DA9325 /* EditorViewModel.swift in Sources */,
+				38E9F943810542D985C42D52 /* Formatting.swift in Sources */,
+				CFFEC962A5470F8C6CC4C5DC /* ImportedAudioTrack.swift in Sources */,
+				325E5180E050AA4497583F32 /* MobileEditorView.swift in Sources */,
+				64EDC1140E8AF2F8B1683F49 /* MobileFramingEditor.swift in Sources */,
+				9FF440407E8075C03C0C1413 /* MobileTestVideo.swift in Sources */,
+				66FCED2314296C495D3B311D /* MobileTimelineView.swift in Sources */,
+				2FD8523D7E39A9937AEEF755 /* PhotoImportLoader.swift in Sources */,
+				6FB41C2E53EC9FE101CAB820 /* ReelMobileApp.swift in Sources */,
+				BA5ED1260255DF4DA2481152 /* Theme.swift in Sources */,
+				DD4894BD9F7068BB42F4D436 /* VideoExporter.swift in Sources */,
+				BC77CB2162888407EB560610 /* VideoFraming.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		15DCB66D63BC27D43662EAE4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 41373B640D9DF06FC279C453 /* ReelMobile */;
+			targetProxy = B9B1D22F6784A05D56B98D9C /* PBXContainerItemProxy */;
+		};
+		2FE62F8F2889C1999527A397 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 41373B640D9DF06FC279C453 /* ReelMobile */;
+			targetProxy = 80EACBA32F23B7CF3E093674 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2F455ED56B9594285F793D65 /* Debug */ = {
@@ -270,6 +509,25 @@
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
+		};
+		35ECA98F342BDEBE982F251B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.ReelMobileTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReelMobile.app/ReelMobile";
+			};
+			name = Release;
 		};
 		4E5D6C843E7E91805AE25340 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -327,10 +585,47 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		68B0C0DD1966AC3056B4C98A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.ReelMobileTests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReelMobile.app/ReelMobile";
+			};
+			name = Debug;
+		};
+		9F388433408261036B86C7F1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.ReelMobileUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ReelMobile;
 			};
 			name = Debug;
 		};
@@ -383,10 +678,70 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		AFCDFEDC357284A1E016FD24 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = "Generated/iOS-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.reel.mobile;
+				PRODUCT_NAME = ReelMobile;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		B3755F2D0AA1AEC20F98134A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				INFOPLIST_FILE = "Generated/iOS-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.reel.mobile;
+				PRODUCT_NAME = ReelMobile;
+				SDKROOT = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		CEF5C883797EAAB966D9FA74 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gamojo.ReelMobileUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ReelMobile;
 			};
 			name = Release;
 		};
@@ -421,6 +776,33 @@
 			buildConfigurations = (
 				2F455ED56B9594285F793D65 /* Debug */,
 				FF00F86CDEA932638C0F7911 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		35AFC8FD2360A31BF44C6B43 /* Build configuration list for PBXNativeTarget "ReelMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B3755F2D0AA1AEC20F98134A /* Debug */,
+				AFCDFEDC357284A1E016FD24 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		48ACC98280EDF92DC8C05B99 /* Build configuration list for PBXNativeTarget "ReelMobileUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9F388433408261036B86C7F1 /* Debug */,
+				CEF5C883797EAAB966D9FA74 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		972494CDE9D25ACB99F5871E /* Build configuration list for PBXNativeTarget "ReelMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				68B0C0DD1966AC3056B4C98A /* Debug */,
+				35ECA98F342BDEBE982F251B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

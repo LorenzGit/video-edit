@@ -1,7 +1,13 @@
 import SwiftUI
 import AVFoundation
+#if os(macOS)
 import AppKit
 import ScreenCaptureKit
+typealias ReelImage = NSImage
+#else
+import UIKit
+typealias ReelImage = UIImage
+#endif
 import UniformTypeIdentifiers
 
 /// Owns all editing state: the loaded source videos, the list of chunks, the
@@ -18,6 +24,7 @@ final class EditorViewModel: ObservableObject {
         let audioTrack: AVAssetTrack?
         let duration: Double
         let preferredTransform: CGAffineTransform
+        let encodedSize: CGSize
         let naturalSize: CGSize     // oriented (preferredTransform applied)
         let frameRate: Float
     }
@@ -47,6 +54,7 @@ final class EditorViewModel: ObservableObject {
 
     @Published var chunks: [Chunk] = []
     @Published var selection: Set<UUID> = []
+    @Published private(set) var videoCrop: VideoCrop?
 
     var hasContent: Bool { sourceURL != nil && !chunks.isEmpty }
 
@@ -56,7 +64,7 @@ final class EditorViewModel: ObservableObject {
         didSet { if oldValue != muteAudio { rebuild() } }
     }
 
-    /// Slowest allowed speed. There is no upper limit — type any value you like.
+    /// Slowest allowed speed. There is no upper limit - type any value you like.
     static let minSpeed: Double = 0.1
 
     /// Name shown in the toolbar (primary file, plus a count when there are more).
@@ -110,6 +118,7 @@ final class EditorViewModel: ObservableObject {
         var audioSources: [UUID: ImportedAudioSource]
         var audioChunks: [AudioChunk]
         var audioSelection: Set<UUID>
+        var videoCrop: VideoCrop?
     }
     private var past: [Snapshot] = []
     private var future: [Snapshot] = []
@@ -129,9 +138,21 @@ final class EditorViewModel: ObservableObject {
 
     // MARK: Thumbnails
 
-    struct ThumbFrame: Identifiable { let id = UUID(); let time: Double; let image: NSImage }
+    struct ThumbFrame: Identifiable { let id = UUID(); let time: Double; let image: ReelImage }
     @Published private(set) var thumbnails: [UUID: [ThumbFrame]] = [:]
     private var thumbTasks: [UUID: Task<Void, Never>] = [:]
+
+    #if os(iOS)
+    @Published private(set) var mobileAudioTarget: MobileAudioTarget?
+    @Published private(set) var mobileWaveforms: [UUID: [Float]] = [:]
+    private var mobileWaveformTasks: [UUID: Task<Void, Never>] = [:]
+    private var mobileWaveformQueue: Task<Void, Never>?
+    @Published private(set) var isImporting = false
+    @Published var exportedURL: URL?
+    var mobileStorageRoot: URL?
+    private var didRestoreMobileDraft = false
+    private var isRestoringMobileDraft = false
+    #endif
 
     // MARK: Export
 
@@ -220,12 +241,12 @@ final class EditorViewModel: ObservableObject {
 
         var title: String {
             switch self {
-            case .compatible: "H.264 — High Quality"
-            case .h264Balanced: "H.264 — Balanced"
-            case .h264Compact: "H.264 — Smaller File"
-            case .efficient: "HEVC — High Quality"
-            case .hevcBalanced: "HEVC — Balanced"
-            case .hevcCompact: "HEVC — Smallest File"
+            case .compatible: "H.264 - High Quality"
+            case .h264Balanced: "H.264 - Balanced"
+            case .h264Compact: "H.264 - Smaller File"
+            case .efficient: "HEVC - High Quality"
+            case .hevcBalanced: "HEVC - Balanced"
+            case .hevcCompact: "HEVC - Smallest File"
             }
         }
 
@@ -300,6 +321,7 @@ final class EditorViewModel: ObservableObject {
 
     private let timescale: CMTimeScale = 600
 
+    #if os(macOS)
     // MARK: Screen recording
 
     @Published private(set) var isPreparingRecording = false
@@ -320,6 +342,8 @@ final class EditorViewModel: ObservableObject {
     var recordingActionDisabled: Bool {
         isPreparingRecording || isSelectingCaptureRegion || isFinishingRecording
     }
+
+    #endif
 
     // MARK: Lifecycle
 
@@ -342,12 +366,18 @@ final class EditorViewModel: ObservableObject {
     deinit {
         if let timeObserver { player.removeTimeObserver(timeObserver) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        #if os(macOS)
         recordingTimer?.cancel()
+        #endif
         importedAudioRebuildTask?.cancel()
+        #if os(iOS)
+        mobileWaveformTasks.values.forEach { $0.cancel() }
+        #endif
     }
 
     // MARK: Loading & importing
 
+    #if os(macOS)
     func beginScreenRecording() {
         guard !isRecording, !recordingActionDisabled, !isExporting else { return }
         if isPlaying {
@@ -567,6 +597,8 @@ final class EditorViewModel: ObservableObject {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
+    #endif
+
     func openVideo(url: URL) { Task { await loadFresh(url: url) } }
     func importVideo(url: URL) { Task { await appendImport(url: url) } }
     func importAudio(url: URL) { Task { await loadImportedAudio(url: url) } }
@@ -606,6 +638,9 @@ final class EditorViewModel: ObservableObject {
                 selection = []
             }
             statusMessage = "Added audio track \(url.lastPathComponent)"
+            #if os(iOS)
+            mobileAudioTarget = .added(chunk.id)
+            #endif
         } catch {
             guard hasContent, chunks.first?.sourceID == projectSourceID else { return }
             statusMessage = "Couldn't import audio: \(error.localizedDescription)"
@@ -666,17 +701,21 @@ final class EditorViewModel: ObservableObject {
 
     private func makeSource(url: URL) async throws -> Source? {
         let asset = AVURLAsset(url: url)
-        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        async let loadedVideoTracks = asset.loadTracks(withMediaType: .video)
+        async let loadedAudioTracks = asset.loadTracks(withMediaType: .audio)
+        async let loadedDuration = asset.load(.duration)
+        let (videoTracks, audioTracks, duration) = try await (loadedVideoTracks, loadedAudioTracks, loadedDuration)
         guard let video = videoTracks.first else { return nil }
-        let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        let duration = try await asset.load(.duration)
-        let transform = try await video.load(.preferredTransform)
-        let size = try await video.load(.naturalSize)
-        let fps = (try? await video.load(.nominalFrameRate)) ?? 30
+        async let loadedTransform = video.load(.preferredTransform)
+        async let loadedSize = video.load(.naturalSize)
+        async let loadedFrameRate = try? video.load(.nominalFrameRate)
+        let (transform, size) = try await (loadedTransform, loadedSize)
+        let fps = await loadedFrameRate ?? 30
         let oriented = size.applying(transform)
         return Source(
             id: UUID(), url: url, asset: asset, videoTrack: video, audioTrack: audioTracks.first,
             duration: duration.seconds, preferredTransform: transform,
+            encodedSize: size,
             naturalSize: CGSize(width: abs(oriented.width), height: abs(oriented.height)),
             frameRate: fps == 0 ? 30 : fps
         )
@@ -695,6 +734,7 @@ final class EditorViewModel: ObservableObject {
             audioSources = [:]
             audioChunks = []
             audioSelection = []
+            videoCrop = nil
             sources = [source.id: source]
             hasAudio = source.audioTrack != nil
             sourceURL = url
@@ -756,10 +796,13 @@ final class EditorViewModel: ObservableObject {
         let compAudio = needsAudio
             ? comp.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
             : nil
+        let embeddedMix = compAudio.map { AVMutableAudioMixInputParameters(track: $0) }
 
-        let renderSize = exportSize(for: firstSource.naturalSize, resolution: outputResolution)
+        let crop = resolvedVideoCrop
+        let renderSize = exportSize(for: crop.outputSize, resolution: outputResolution)
         var cursor = CMTime.zero
         var instructions: [AVMutableVideoCompositionInstruction] = []
+        var embeddedSpans: [AudioGainEnvelope.Span] = []
 
         for chunk in chunks {
             guard let source = sources[chunk.sourceID], chunk.sourceDuration > 0 else { continue }
@@ -783,15 +826,31 @@ final class EditorViewModel: ObservableObject {
             }
 
             let instruction = AVMutableVideoCompositionInstruction()
+            for section in chunk.visibleAudioSections {
+                let lower = max(0, min(segmentDuration.seconds, (section.start - chunk.start) / chunk.speed))
+                let upper = section.end == chunk.end ? segmentDuration.seconds
+                    : max(lower, min(segmentDuration.seconds, (section.end - chunk.start) / chunk.speed))
+                embeddedSpans.append(.init(start: segmentStart.seconds + lower,
+                                           duration: upper - lower,
+                                           volume: source.audioTrack == nil ? 0 : max(0, min(1, section.volume)),
+                                           fades: section.fades == true))
+            }
             instruction.timeRange = CMTimeRange(start: segmentStart, duration: segmentDuration)
             let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: compVideo)
-            layer.setTransform(fitTransform(for: source, into: renderSize), at: segmentStart)
+            layer.setTransform(VideoGeometry.transform(encodedSize: source.encodedSize, preferred: source.preferredTransform,
+                                                       crop: crop, framing: chunk.framing ?? ClipFraming(), outputSize: renderSize),
+                               at: segmentStart)
             instruction.layerInstructions = [layer]
             instructions.append(instruction)
 
             cursor = segmentStart + segmentDuration
         }
 
+        if let embeddedMix {
+            for index in embeddedSpans.indices {
+                AudioGainEnvelope.ramps(at: index, in: embeddedSpans).forEach { $0.apply(to: embeddedMix) }
+            }
+        }
         let videoComp = AVMutableVideoComposition()
         videoComp.renderSize = renderSize
         let fps = max(24, min(60, Double(firstSource.frameRate)))
@@ -801,8 +860,13 @@ final class EditorViewModel: ObservableObject {
         // Audio-lane clips use independent composition tracks. They can be cut,
         // moved, overlapped and re-timed without ever consulting `muteAudio`.
         let timelineDuration = cursor.seconds
-        var mixParameters: [AVAudioMixInputParameters] = []
-        for audio in audioChunks.sorted(by: { $0.timelineStart < $1.timelineStart }) {
+        var mixParameters: [AVAudioMixInputParameters] = embeddedMix.map { [$0] } ?? []
+        let sortedAudio = audioChunks.sorted(by: { $0.timelineStart < $1.timelineStart })
+        let addedSpans = sortedAudio.map {
+            AudioGainEnvelope.Span(start: $0.timelineStart, duration: min($0.outputDuration, max(0, timelineDuration - $0.timelineStart)),
+                                   volume: max(0, min(2, $0.volume)), fades: $0.smoothTransitions == true)
+        }
+        for (audioIndex, audio) in sortedAudio.enumerated() {
             guard let source = audioSources[audio.sourceID], audio.speed > 0 else { continue }
             let placementStart = max(0, min(audio.timelineStart, timelineDuration))
             let placedDuration = max(0, min(audio.outputDuration, timelineDuration - placementStart))
@@ -839,32 +903,36 @@ final class EditorViewModel: ObservableObject {
             let fadeOut = min(max(0, audio.fadeOutDuration), placedDuration / 2)
             let parameters = AVMutableAudioMixInputParameters(track: compositionAudio)
 
-            if fadeIn > 0 {
-                parameters.setVolumeRamp(
-                    fromStartVolume: 0,
-                    toEndVolume: volume,
-                    timeRange: CMTimeRange(
-                        start: destinationStart,
-                        duration: CMTime(seconds: fadeIn, preferredTimescale: timescale)
-                    )
-                )
+            if addedSpans.contains(where: \.fades) {
+                AudioGainEnvelope.ramps(at: audioIndex, in: addedSpans).forEach { $0.apply(to: parameters) }
             } else {
-                parameters.setVolume(volume, at: destinationStart)
-            }
-
-            if fadeOut > 0 {
-                let fadeOutStart = CMTime(
-                    seconds: placementStart + placedDuration - fadeOut,
-                    preferredTimescale: timescale
-                )
-                parameters.setVolumeRamp(
-                    fromStartVolume: volume,
-                    toEndVolume: 0,
-                    timeRange: CMTimeRange(
-                        start: fadeOutStart,
-                        duration: CMTime(seconds: fadeOut, preferredTimescale: timescale)
+                if fadeIn > 0 {
+                    parameters.setVolumeRamp(
+                        fromStartVolume: 0,
+                        toEndVolume: volume,
+                        timeRange: CMTimeRange(
+                            start: destinationStart,
+                            duration: CMTime(seconds: fadeIn, preferredTimescale: timescale)
+                        )
                     )
-                )
+                } else {
+                    parameters.setVolume(volume, at: destinationStart)
+                }
+
+                if fadeOut > 0 {
+                    let fadeOutStart = CMTime(
+                        seconds: placementStart + placedDuration - fadeOut,
+                        preferredTimescale: timescale
+                    )
+                    parameters.setVolumeRamp(
+                        fromStartVolume: volume,
+                        toEndVolume: 0,
+                        timeRange: CMTimeRange(
+                            start: fadeOutStart,
+                            duration: CMTime(seconds: fadeOut, preferredTimescale: timescale)
+                        )
+                    )
+                }
             }
             mixParameters.append(parameters)
         }
@@ -878,16 +946,26 @@ final class EditorViewModel: ObservableObject {
         return (comp, videoComp, audioMix)
     }
 
-    /// Transform that orients a source frame and aspect-fits it, centred, into `renderSize`.
-    private func fitTransform(for source: Source, into renderSize: CGSize) -> CGAffineTransform {
-        let oriented = source.naturalSize
-        guard oriented.width > 0, oriented.height > 0 else { return source.preferredTransform }
-        let scale = min(renderSize.width / oriented.width, renderSize.height / oriented.height)
-        let tx = (renderSize.width - oriented.width * scale) / 2
-        let ty = (renderSize.height - oriented.height * scale) / 2
-        return source.preferredTransform
-            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
-            .concatenating(CGAffineTransform(translationX: tx, y: ty))
+    var resolvedVideoCrop: VideoCrop {
+        if let videoCrop { return videoCrop.clamped }
+        let size = chunks.first.flatMap { sources[$0.sourceID]?.naturalSize } ?? CGSize(width: 1080, height: 1920)
+        return VideoCrop(canvasWidth: size.width, canvasHeight: size.height)
+    }
+
+    func setVideoCrop(_ crop: VideoCrop) {
+        let next = crop.clamped
+        guard videoCrop != next else { return }
+        commit { videoCrop = next }
+    }
+
+    func setClipFraming(_ framing: ClipFraming, for id: UUID) {
+        guard let index = chunks.firstIndex(where: { $0.id == id }) else { return }
+        let next = framing.clamped
+        guard (chunks[index].framing ?? ClipFraming()) != next else { return }
+        commit {
+            if videoCrop == nil { videoCrop = resolvedVideoCrop }
+            chunks[index].framing = next
+        }
     }
 
     private func evenSize(_ size: CGSize) -> CGSize {
@@ -913,6 +991,9 @@ final class EditorViewModel: ObservableObject {
     }
 
     private func rebuild(seekTo time: Double? = nil) {
+        #if os(iOS)
+        defer { saveMobileDraft() }
+        #endif
         totalDuration = chunks.reduce(0) { $0 + $1.outputDuration }
         guard let built = buildComposition(), totalDuration > 0 else {
             player.replaceCurrentItem(with: nil)
@@ -920,7 +1001,13 @@ final class EditorViewModel: ObservableObject {
             return
         }
         let item = AVPlayerItem(asset: built.composition)
+        #if os(macOS)
         item.videoComposition = built.video
+        #endif
+        // Mobile playback uses the same timeline and audio mix. Its player layer
+        // applies the source transform and aspect fit without a video compositor.
+        // This also avoids composition-backed video-compositor playback failures
+        // reproduced on iOS 27, while export still uses the full video composition.
         item.audioMix = built.audioMix
         item.audioTimePitchAlgorithm = .spectral
         player.replaceCurrentItem(with: item)
@@ -977,7 +1064,8 @@ final class EditorViewModel: ObservableObject {
             selection: selection,
             audioSources: audioSources,
             audioChunks: audioChunks,
-            audioSelection: audioSelection
+            audioSelection: audioSelection,
+            videoCrop: videoCrop
         )
     }
 
@@ -1016,11 +1104,13 @@ final class EditorViewModel: ObservableObject {
             let chunk = audioChunks[index]
             guard local > 0.02, local < chunk.outputDuration - 0.02 else { return }
             let sourceSplit = chunk.start + local * chunk.speed
+            let secondID = UUID()
             commit {
                 var first = chunk
                 first.end = sourceSplit
                 first.fadeOutDuration = 0
                 var second = AudioChunk(
+                    id: secondID,
                     sourceID: chunk.sourceID,
                     start: sourceSplit,
                     end: chunk.end,
@@ -1030,11 +1120,15 @@ final class EditorViewModel: ObservableObject {
                     fadeInDuration: 0,
                     fadeOutDuration: chunk.fadeOutDuration
                 )
+                second.smoothTransitions = chunk.smoothTransitions
                 normalizeAudioChunk(&first)
                 normalizeAudioChunk(&second)
                 audioChunks.replaceSubrange(index...index, with: [first, second])
                 audioSelection = [second.id]
             }
+            #if os(iOS)
+            mobileAudioTarget = .added(secondID)
+            #endif
             return
         }
 
@@ -1043,8 +1137,10 @@ final class EditorViewModel: ObservableObject {
         if local <= 0.02 || local >= chunk.outputDuration - 0.02 { return }
         let sourceSplit = chunk.start + local * chunk.speed
         commit {
-            let first = Chunk(id: chunk.id, sourceID: chunk.sourceID, start: chunk.start, end: sourceSplit, speed: chunk.speed)
-            let second = Chunk(sourceID: chunk.sourceID, start: sourceSplit, end: chunk.end, speed: chunk.speed)
+            let first = Chunk(id: chunk.id, sourceID: chunk.sourceID, start: chunk.start, end: sourceSplit,
+                              speed: chunk.speed, audioSections: chunk.audioSections, framing: chunk.framing)
+            let second = Chunk(sourceID: chunk.sourceID, start: sourceSplit, end: chunk.end,
+                               speed: chunk.speed, audioSections: chunk.audioSections, framing: chunk.framing)
             chunks.replaceSubrange(index...index, with: [first, second])
             selection = [second.id]
         }
@@ -1129,8 +1225,16 @@ final class EditorViewModel: ObservableObject {
         isPlaying = false
         thumbTasks.values.forEach { $0.cancel() }
         thumbTasks.removeAll()
+        #if os(iOS)
+        mobileWaveformTasks.values.forEach { $0.cancel() }
+        mobileWaveformTasks.removeAll()
+        mobileWaveformQueue = nil
+        mobileWaveforms = [:]
+        mobileAudioTarget = nil
+        #endif
 
         sources.removeAll()
+        videoCrop = nil
         chunks = []
         selection = []
         audioSources.removeAll()
@@ -1151,6 +1255,9 @@ final class EditorViewModel: ObservableObject {
         if muteAudio {
             muteAudio = false
         }
+        #if os(iOS)
+        saveMobileDraft()
+        #endif
     }
 
     // MARK: Non-destructive trimming
@@ -1164,6 +1271,9 @@ final class EditorViewModel: ObservableObject {
     /// The actual chunk is left untouched until the gesture ends.
     func beginTrimPreview(_ id: UUID) {
         guard chunks.contains(where: { $0.id == id }) else { return }
+        #if os(iOS)
+        mobileAudioTarget = nil
+        #endif
         if isPlaying {
             player.pause()
             isPlaying = false
@@ -1505,6 +1615,7 @@ final class EditorViewModel: ObservableObject {
         audioSources = snap.audioSources
         audioChunks = snap.audioChunks
         audioSelection = snap.audioSelection
+        videoCrop = snap.videoCrop
         rebuild()
     }
 
@@ -1516,12 +1627,16 @@ final class EditorViewModel: ObservableObject {
         audioSources = snap.audioSources
         audioChunks = snap.audioChunks
         audioSelection = snap.audioSelection
+        videoCrop = snap.videoCrop
         rebuild()
     }
 
     // MARK: Selection
 
     func select(_ id: UUID, additive: Bool) {
+        #if os(iOS)
+        mobileAudioTarget = nil
+        #endif
         if additive {
             if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
         } else {
@@ -1532,6 +1647,9 @@ final class EditorViewModel: ObservableObject {
 
     func selectAudio(_ id: UUID) {
         guard audioChunks.contains(where: { $0.id == id }) else { return }
+        #if os(iOS)
+        mobileAudioTarget = .added(id)
+        #endif
         audioSelection = [id]
         selection = []
     }
@@ -1563,11 +1681,19 @@ final class EditorViewModel: ObservableObject {
 
         let generator = AVAssetImageGenerator(asset: source.asset)
         generator.appliesPreferredTrackTransform = true
+        #if os(iOS)
+        generator.maximumSize = CGSize(width: 192, height: 192)
+        #else
         generator.maximumSize = CGSize(width: 320, height: 320)
+        #endif
         generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: timescale)
         generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: timescale)
 
+        #if os(iOS)
+        let count = min(24, max(6, Int(source.duration / 5)))
+        #else
         let count = min(120, max(10, Int(source.duration)))
+        #endif
         let step = source.duration / Double(count)
         let times = (0..<count).map {
             CMTime(seconds: (Double($0) + 0.5) * step, preferredTimescale: timescale)
@@ -1578,7 +1704,11 @@ final class EditorViewModel: ObservableObject {
             for await frame in generator.images(for: times) {
                 if Task.isCancelled { return }
                 guard let cg = try? frame.image else { continue }
+#if os(macOS)
                 let image = NSImage(cgImage: cg, size: .zero)
+#else
+                let image = UIImage(cgImage: cg)
+#endif
                 let time = frame.requestedTime.seconds
                 self?.thumbnails[sid, default: []].append(ThumbFrame(time: time, image: image))
                 self?.thumbnails[sid]?.sort { $0.time < $1.time }
@@ -1587,9 +1717,9 @@ final class EditorViewModel: ObservableObject {
     }
 
     /// Nearest cached thumbnail in a source to a given source time.
-    func thumbnail(sourceID: UUID, near time: Double) -> NSImage? {
+    func thumbnail(sourceID: UUID, near time: Double) -> ReelImage? {
         guard let frames = thumbnails[sourceID], !frames.isEmpty else { return nil }
-        var best: NSImage?
+        var best: ReelImage?
         var bestDiff = Double.greatestFiniteMagnitude
         for frame in frames {
             let diff = abs(frame.time - time)
@@ -1643,20 +1773,25 @@ final class EditorViewModel: ObservableObject {
         let resolution = exportResolution
         let compression = exportCompression
 
+        #if os(macOS)
         switch action {
         case .file:
             chooseExportDestination(resolution: resolution, compression: compression)
         case .clipboard:
             prepareClipboardExport(resolution: resolution, compression: compression)
         }
+        #else
+        exportMobile()
+        #endif
     }
 
     func exportDimensions(for resolution: ExportResolution) -> String {
-        guard let first = chunks.first, let source = sources[first.sourceID] else { return "—" }
-        let size = exportSize(for: source.naturalSize, resolution: resolution)
+        guard let first = chunks.first, let source = sources[first.sourceID] else { return "-" }
+        let size = exportSize(for: resolvedVideoCrop.outputSize, resolution: resolution)
         return "\(Int(size.width)) × \(Int(size.height))"
     }
 
+    #if os(macOS)
     private func chooseExportDestination(
         resolution: ExportResolution,
         compression: ExportCompression
@@ -1695,6 +1830,8 @@ final class EditorViewModel: ObservableObject {
             statusMessage = "Couldn't prepare the clipboard copy: \(error.localizedDescription)"
         }
     }
+
+    #endif
 
     private func defaultExportName() -> String {
         let base = (displayName as NSString).deletingPathExtension
@@ -1755,7 +1892,11 @@ final class EditorViewModel: ObservableObject {
             switch destination {
             case .file:
                 statusMessage = "Exported \(url.lastPathComponent)"
+                #if os(macOS)
                 NSWorkspace.shared.activateFileViewerSelecting([url])
+                #else
+                exportedURL = url
+                #endif
             case .clipboard:
                 if putVideoOnClipboard(url) {
                     statusMessage = "Copied video to the clipboard."
@@ -1783,6 +1924,7 @@ final class EditorViewModel: ObservableObject {
         return folder.appendingPathComponent(defaultExportName())
     }
 
+    #if os(macOS)
     private func putVideoOnClipboard(_ url: URL) -> Bool {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -1795,6 +1937,10 @@ final class EditorViewModel: ObservableObject {
         }
         return true
     }
+
+    #else
+    private func putVideoOnClipboard(_ url: URL) -> Bool { false }
+    #endif
 
     private func discardClipboardStagingFileIfNeeded(
         at url: URL,
@@ -1809,3 +1955,368 @@ final class EditorViewModel: ObservableObject {
         try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 }
+
+#if os(iOS)
+struct MobilePreviewGeometry {
+    let encodedSize: CGSize
+    let outputSize: CGSize
+    let transform: CGAffineTransform
+}
+
+private struct MobileDraft: Codable {
+    struct Media: Codable {
+        let id: UUID
+        let path: String
+    }
+    let version: Int
+    let videos: [Media]
+    let audio: [Media]
+    let chunks: [Chunk]
+    let audioChunks: [AudioChunk]
+    let muted: Bool
+    var crop: VideoCrop?
+}
+
+extension EditorViewModel {
+    var mobileVideoAudioSegments: [MobileAudioSegment] {
+        var cursor = 0.0
+        return chunks.flatMap { chunk -> [MobileAudioSegment] in
+            defer { cursor += chunk.outputDuration }
+            return chunk.visibleAudioSections.map { section in
+                MobileAudioSegment(target: .video(chunkID: chunk.id, sectionID: section.id),
+                                   sourceID: chunk.sourceID, start: section.start, end: section.end,
+                                   timelineStart: cursor + (section.start - chunk.start) / chunk.speed,
+                                   duration: (section.end - section.start) / chunk.speed,
+                                   sourceDuration: sources[chunk.sourceID]?.duration ?? chunk.end,
+                                   volume: muteAudio ? 0 : section.volume,
+                                   hasAudio: sources[chunk.sourceID]?.audioTrack != nil, fades: section.fades == true)
+            }
+        }
+    }
+
+    var mobileAddedAudioSegments: [MobileAudioSegment] {
+        audioChunks.map { audio in
+            MobileAudioSegment(target: .added(audio.id), sourceID: audio.sourceID,
+                               start: audio.start, end: audio.end, timelineStart: audio.timelineStart,
+                               duration: min(audio.outputDuration, max(0, totalDuration - audio.timelineStart)),
+                               sourceDuration: audioSources[audio.sourceID]?.duration ?? audio.end,
+                               volume: audio.volume, hasAudio: true, fades: audio.smoothTransitions == true)
+        }
+    }
+
+    var selectedMobileAudioSegment: MobileAudioSegment? {
+        (mobileVideoAudioSegments + mobileAddedAudioSegments).first { $0.target == mobileAudioTarget }
+    }
+
+    var mobileSourceAudioSelected: Bool {
+        if case .video = mobileAudioTarget { return selectedMobileAudioSegment != nil }
+        return false
+    }
+
+    func selectMobileAudio(_ target: MobileAudioTarget?) {
+        mobileAudioTarget = target
+        clearSelection()
+        beginScrub()
+        endScrub()
+        if case .added(let id) = target { audioSelection = [id] }
+    }
+
+    func selectMobileAudioAtPlayhead() {
+        let segment = mobileVideoAudioSegments.first {
+            $0.hasAudio && currentTime >= $0.timelineStart && currentTime < $0.timelineStart + $0.duration
+        } ?? mobileAddedAudioSegments.first
+        selectMobileAudio(segment?.target)
+    }
+
+    func splitMobileAudioAtPlayhead() {
+        guard let (index, local, _) = chunkAtPlayhead(), sources[chunks[index].sourceID]?.audioTrack != nil else { return }
+        let chunk = chunks[index]
+        let sourceTime = chunk.start + local * chunk.speed
+        var sections = chunk.audioSections ?? [ClipAudioSection(id: chunk.id, start: 0,
+                                                                 end: sources[chunk.sourceID]?.duration ?? chunk.end)]
+        guard let sectionIndex = sections.firstIndex(where: {
+            sourceTime > max(chunk.start, $0.start) + 0.02 * chunk.speed &&
+            sourceTime < min(chunk.end, $0.end) - 0.02 * chunk.speed
+        }) else { return }
+        let original = sections[sectionIndex]
+        var first = original
+        first.end = sourceTime
+        let second = ClipAudioSection(start: sourceTime, end: original.end, volume: original.volume, fades: original.fades)
+        sections.replaceSubrange(sectionIndex...sectionIndex, with: [first, second])
+        commit { chunks[index].audioSections = sections }
+        selectMobileAudio(.video(chunkID: chunk.id, sectionID: second.id))
+    }
+
+    func setMobileAudioVolume(_ value: Double) {
+        guard value.isFinite, let target = mobileAudioTarget else { return }
+        let volume = Float(max(0, min(1, value)))
+        switch target {
+        case .video(let chunkID, let sectionID):
+            guard let index = chunks.firstIndex(where: { $0.id == chunkID }) else { return }
+            var sections = chunks[index].audioSections ?? [ClipAudioSection(id: chunkID, start: 0,
+                end: sources[chunks[index].sourceID]?.duration ?? chunks[index].end)]
+            guard let section = sections.firstIndex(where: { $0.id == sectionID }),
+                  sections[section].volume != volume || muteAudio else { return }
+            sections[section].volume = volume
+            commit { chunks[index].audioSections = sections }
+            // Existing drafts can have a global video mute. Keep that explicit
+            // until the user restores original sound with the button in the lane.
+        case .added(let id):
+            guard let index = audioChunks.firstIndex(where: { $0.id == id }), audioChunks[index].volume != volume else { return }
+            commit { audioChunks[index].volume = volume }
+        }
+    }
+
+    func setMobileAudioFade(_ enabled: Bool) {
+        guard let target = mobileAudioTarget else { return }
+        switch target {
+        case .video(let chunkID, let sectionID):
+            guard let index = chunks.firstIndex(where: { $0.id == chunkID }) else { return }
+            var sections = chunks[index].audioSections ?? [ClipAudioSection(id: chunkID, start: 0,
+                end: sources[chunks[index].sourceID]?.duration ?? chunks[index].end)]
+            guard let section = sections.firstIndex(where: { $0.id == sectionID }),
+                  (sections[section].fades == true) != enabled else { return }
+            sections[section].fades = enabled
+            commit { chunks[index].audioSections = sections }
+        case .added(let id):
+            guard let index = audioChunks.firstIndex(where: { $0.id == id }),
+                  (audioChunks[index].smoothTransitions == true) != enabled else { return }
+            commit { audioChunks[index].smoothTransitions = enabled }
+        }
+    }
+
+    func prepareMobileWaveforms() {
+        let media = sources.values.filter { $0.audioTrack != nil }.map { ($0.id, $0.url, $0.duration) }
+            + audioSources.values.map { ($0.id, $0.url, $0.duration) }
+        for (id, url, duration) in media where mobileWaveforms[id] == nil && mobileWaveformTasks[id] == nil {
+            let predecessor = mobileWaveformQueue
+            let task = Task { [weak self] in
+                await predecessor?.value
+                guard !Task.isCancelled else { return }
+                let worker = Task.detached(priority: .utility) { try await AudioWaveform.read(url: url, duration: duration) }
+                let peaks = await withTaskCancellationHandler {
+                    try? await worker.value
+                } onCancel: { worker.cancel() }
+                guard !Task.isCancelled, let self else { return }
+                if self.sources[id] != nil || self.audioSources[id] != nil { self.mobileWaveforms[id] = peaks ?? [] }
+                self.mobileWaveformTasks[id] = nil
+            }
+            mobileWaveformTasks[id] = task
+            mobileWaveformQueue = task
+        }
+    }
+
+    private var mobileDocuments: URL {
+        mobileStorageRoot ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
+    private var mobileDraftURL: URL {
+        mobileDocuments.appendingPathComponent("Reel-draft.json")
+    }
+
+    func saveMobileDraft() {
+        guard !isRestoringMobileDraft else { return }
+        do {
+            let root = mobileDocuments.path + "/"
+            let draft = MobileDraft(
+                version: 1,
+                videos: sources.values.map {
+                    .init(id: $0.id, path: String($0.url.path.dropFirst(root.count)))
+                },
+                audio: audioSources.values.map {
+                    .init(id: $0.id, path: String($0.url.path.dropFirst(root.count)))
+                },
+                chunks: chunks,
+                audioChunks: audioChunks,
+                muted: muteAudio,
+                crop: videoCrop
+            )
+            try JSONEncoder().encode(draft).write(to: mobileDraftURL, options: .atomic)
+        } catch {
+            statusMessage = "Couldn't save your draft: \(error.localizedDescription)"
+        }
+    }
+
+    func restoreMobileDraft() async {
+        guard !didRestoreMobileDraft else { return }
+        didRestoreMobileDraft = true
+        guard FileManager.default.fileExists(atPath: mobileDraftURL.path) else { return }
+        isImporting = true
+        isRestoringMobileDraft = true
+        defer { isImporting = false; isRestoringMobileDraft = false }
+        do {
+            let draft = try JSONDecoder().decode(MobileDraft.self, from: Data(contentsOf: mobileDraftURL))
+            guard draft.version == 1 else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            var restored: [UUID: Source] = [:]
+            for media in draft.videos {
+                let url = mobileDocuments.appendingPathComponent(media.path)
+                guard let source = try await makeSource(url: url) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                restored[media.id] = Source(
+                    id: media.id, url: url, asset: source.asset,
+                    videoTrack: source.videoTrack, audioTrack: source.audioTrack,
+                    duration: source.duration, preferredTransform: source.preferredTransform,
+                    encodedSize: source.encodedSize, naturalSize: source.naturalSize, frameRate: source.frameRate
+                )
+            }
+            var restoredAudio: [UUID: ImportedAudioSource] = [:]
+            for media in draft.audio {
+                let url = mobileDocuments.appendingPathComponent(media.path)
+                let asset = AVURLAsset(url: url)
+                guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                let duration = try await asset.load(.duration).seconds
+                restoredAudio[media.id] = ImportedAudioSource(
+                    id: media.id, url: url, asset: asset, track: track, duration: duration
+                )
+            }
+            guard draft.chunks.allSatisfy({ restored[$0.sourceID] != nil }),
+                  draft.audioChunks.allSatisfy({ restoredAudio[$0.sourceID] != nil }) else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            sources = restored
+            audioSources = restoredAudio
+            chunks = draft.chunks
+            audioChunks = draft.audioChunks
+            sourceURL = chunks.first.flatMap { sources[$0.sourceID]?.url }
+            hasAudio = sources.values.contains { $0.audioTrack != nil }
+            videoCrop = draft.crop
+            muteAudio = draft.muted
+            rebuild(seekTo: 0)
+            for source in sources.values { generateThumbnails(for: source) }
+        } catch {
+            statusMessage = "Couldn't restore the saved draft: \(error.localizedDescription)"
+        }
+    }
+
+    /// Copy picked files into the app before picker/provider access expires.
+    func importMobileFiles(_ urls: [URL], asAudio: Bool = false, consumingStagedFiles: Bool = false) async {
+        guard !isImporting, !isExporting else { return }
+        isImporting = true
+        defer { isImporting = false }
+        for url in urls {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let folder = mobileDocuments.appendingPathComponent("Media")
+                    .appendingPathComponent(UUID().uuidString)
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                let destination = folder.appendingPathComponent(url.lastPathComponent)
+                let canMove = consumingStagedFiles && MovieImportStorage.owns(url)
+                try await Task.detached(priority: .userInitiated) {
+                    if canMove { try FileManager.default.moveItem(at: url, to: destination) }
+                    else { try FileManager.default.copyItem(at: url, to: destination) }
+                }.value
+                if asAudio {
+                    await loadImportedAudio(url: destination)
+                } else if hasContent {
+                    _ = await appendImport(url: destination)
+                } else {
+                    _ = await loadFresh(url: destination)
+                }
+            } catch {
+                statusMessage = "Couldn't import \(url.lastPathComponent): \(error.localizedDescription)"
+            }
+        }
+        saveMobileDraft()
+    }
+
+    func newMobileProject() {
+        clearAll()
+        let media = mobileDocuments.appendingPathComponent("Media")
+        try? FileManager.default.removeItem(at: media)
+        exportedURL = nil
+        saveMobileDraft()
+    }
+
+    var mobilePreviewGeometry: MobilePreviewGeometry? { mobileGeometry() }
+
+    func mobileGeometry(crop: VideoCrop? = nil, framing: ClipFraming? = nil) -> MobilePreviewGeometry? {
+        guard !chunks.isEmpty else { return nil }
+        let chunk = chunkAtPlayhead().map { chunks[$0.index] } ?? chunks.last!
+        guard let source = sources[chunk.sourceID] else { return nil }
+        let canvas = crop ?? resolvedVideoCrop
+        return MobilePreviewGeometry(encodedSize: source.encodedSize, outputSize: canvas.outputSize,
+            transform: VideoGeometry.transform(encodedSize: source.encodedSize, preferred: source.preferredTransform,
+                                               crop: canvas, framing: framing ?? chunk.framing ?? ClipFraming(),
+                                               outputSize: canvas.outputSize))
+    }
+
+    func prepareMobileFraming() -> Chunk? {
+        guard let chunk = selectedMobileChunk ?? chunkAtPlayhead().map({ chunks[$0.index] }) ?? chunks.first else { return nil }
+        beginTrimPreview(chunk.id)
+        let start = timelineStart(for: chunk)
+        if currentTime < start || currentTime >= start + chunk.outputDuration {
+            seek(to: start + min(0.03, chunk.outputDuration / 2))
+        }
+        return chunk
+    }
+
+    func mobileFillFraming(_ framing: ClipFraming, chunkID: UUID) -> ClipFraming {
+        guard let chunk = chunks.first(where: { $0.id == chunkID }), let source = sources[chunk.sourceID] else { return framing }
+        let crop = resolvedVideoCrop
+        let size = source.naturalSize
+        let fit = min(crop.canvasWidth / size.width, crop.canvasHeight / size.height)
+        let halfW = size.width * fit / 2
+        let halfH = size.height * fit / 2
+        let radians = -framing.rotation * .pi / 180
+        let corners = [CGPoint(x: -crop.rect.width / 2, y: -crop.rect.height / 2),
+                       CGPoint(x: crop.rect.width / 2, y: -crop.rect.height / 2)]
+        let required = corners.map { $0.applying(CGAffineTransform(rotationAngle: radians)) }
+            .reduce(0.1) { max($0, abs($1.x) / halfW, abs($1.y) / halfH) }
+        return ClipFraming(zoom: required, offsetX: (crop.rect.midX - crop.canvasWidth / 2) / crop.canvasWidth,
+                           offsetY: (crop.rect.midY - crop.canvasHeight / 2) / crop.canvasHeight,
+                           rotation: framing.rotation).clamped
+    }
+
+    var selectedMobileChunk: Chunk? {
+        guard let id = selection.first else { return nil }
+        return chunks.first { $0.id == id }
+    }
+
+    func moveMobileChunks(from offsets: IndexSet, to destination: Int) {
+        guard !offsets.isEmpty, offsets.allSatisfy({ chunks.indices.contains($0) }),
+              destination >= 0, destination <= chunks.count else { return }
+        var reordered = chunks
+        reordered.move(fromOffsets: offsets, toOffset: destination)
+        guard reordered != chunks else { return }
+        commit { chunks = reordered }
+    }
+
+    func sourceDuration(for chunk: Chunk) -> Double {
+        sources[chunk.sourceID]?.duration ?? chunk.end
+    }
+
+    func timelineStart(for chunk: Chunk) -> Double {
+        chunks.prefix { $0.id != chunk.id }.reduce(0) { $0 + $1.outputDuration }
+    }
+
+    func selectMobileChunk(_ chunk: Chunk) {
+        beginTrimPreview(chunk.id)
+        seek(to: timelineStart(for: chunk))
+    }
+
+    func exportMobile() {
+        guard hasContent, !isExporting else { return }
+        exportedURL = nil
+        do {
+            let folder = FileManager.default.temporaryDirectory
+                .appendingPathComponent("Reel Exports").appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let url = folder.appendingPathComponent(defaultExportName())
+            Task {
+                UIApplication.shared.isIdleTimerDisabled = true
+                defer { UIApplication.shared.isIdleTimerDisabled = false }
+                await runExport(to: url, destination: .file,
+                                resolution: exportResolution, compression: exportCompression)
+            }
+        } catch {
+            statusMessage = "Couldn't prepare export: \(error.localizedDescription)"
+        }
+    }
+}
+#endif

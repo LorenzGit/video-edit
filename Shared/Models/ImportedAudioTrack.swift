@@ -26,7 +26,7 @@ struct ImportedAudioSource {
 
 /// One editable clip in the thin audio lane above the video timeline.
 /// Source times are independent from its absolute placement on the video.
-struct AudioChunk: Identifiable, Equatable {
+struct AudioChunk: Identifiable, Equatable, Codable {
     let id: UUID
     var sourceID: UUID
     var start: Double
@@ -36,6 +36,7 @@ struct AudioChunk: Identifiable, Equatable {
     var volume: Float
     var fadeInDuration: Double
     var fadeOutDuration: Double
+    var smoothTransitions: Bool?
 
     init(
         id: UUID = UUID(),

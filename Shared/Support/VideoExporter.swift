@@ -19,9 +19,9 @@ enum VideoExporter {
             case .noVideoTrack:
                 "The edited video has no readable video track."
             case .unsupportedVideoSettings:
-                "The selected video compression isn't supported on this Mac."
+                "The selected video compression isn't supported on this device."
             case .unsupportedAudioSettings:
-                "The selected audio compression isn't supported on this Mac."
+                "The selected audio compression isn't supported on this device."
             case .cannotAddReaderOutput(let media):
                 "The \(media) track couldn't be prepared for export."
             case .cannotAddWriterInput(let media):

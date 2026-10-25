@@ -37,3 +37,27 @@ DerivedData/
 # Release artifacts (produced by scripts/build-release.sh)
 dist/
 *.zip
+
+# Local credentials and Apple signing material
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.pem
+*.key
+*.cer
+*.mobileprovision
+*.provisionprofile
+
+# Xcode archives, diagnostics and local media drafts
+*.xcarchive/
+*.xcresult/
+*.log
+/Reel-draft.json
+/Media/
+*.wav
+*.m4a
+*.mp3
+*.aiff
+*.caf

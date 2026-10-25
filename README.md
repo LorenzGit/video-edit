@@ -42,6 +42,61 @@ does the handful of things I actually need and nothing else.
 
 That's the whole app. No accounts, no cloud, no watermark.
 
+## iPhone companion
+
+Reel also has a native iPhone and iPad companion (iOS 17+), built in this repo
+as the **ReelMobile** target. It shares the timeline models, editing engine, and
+MP4 exporter with the Mac app.
+
+- Import one or more videos from Photos or Files, including screen recordings.
+  Photos uses the current video encoding to avoid unnecessary conversion. Loading
+  shows provider progress and can be cancelled; iCloud originals may need downloading.
+- Split, trim, join, reorder, change speed, mute, undo, and redo.
+- Drag the filmstrip beneath the fixed playhead to scrub. Fit shows the whole
+  edit across the available width, with the playhead moving over the clips.
+  Selecting a clip preserves the current frame in either view.
+- Tap a clip to reveal its trim handles, then drag either edge. Pinch to zoom,
+  or use Fit and the zoom controls. Hold a clip, then drag it along the timeline
+  to reorder. Clips make room as you drag, and holding near either edge scrolls
+  the timeline. Each drop is one undo step.
+- Tap Audio to reveal sound lanes on the same time axis. Split the audio at both
+  ends of a spot, tap that section, then lower its volume or mute it. Video stays
+  continuous. Original sound stays attached when video is trimmed, moved or
+  retimed. Added audio has its own lane and volume controls. Real waveforms load
+  in the background. Audio cuts and volume changes support undo and save in drafts.
+- Crop changes the entire edit: use Original, 9:16, 1:1, 4:5 or 16:9, or drag
+  the custom crop corners. Move the crop frame to choose what stays visible.
+- Frame changes one video clip: drag to reposition, pinch to zoom, and rotate
+  with two fingers. Zoom and rotation sliders, Fill, 90° and Reset are also
+  available. Apply makes one undo step; Cancel leaves the edit unchanged.
+  Crop and framing persist in drafts and use the same matrix in preview/export.
+- Fade in the audio controls smooths transitions to neighboring sections over
+  up to 0.2 seconds. Muted sections stay silent throughout; louder neighbors
+  fade down to them and back up. Fade works for original and added audio.
+- Add an audio file from the import menu.
+- Export MP4 with resolution and H.264/HEVC compression options, then share,
+  save to Files, or choose Save Video in the share sheet to save to Photos.
+- The current draft saves on device automatically and restores on launch.
+  Imported footage is copied into Reel, so provider access can safely expire.
+- Portrait and landscape layouts are supported. Keep Reel open during export.
+
+Screen recording uses the iPhone's built-in recorder, followed by import into
+Reel. The Mac's region recorder is available in the Mac app.
+
+Open `Reel.xcodeproj`, select **ReelMobile**, choose your signing team and iPhone,
+and run. Signing credentials are configured locally. To install on a paired
+phone from the terminal, provide your own Apple Developer team ID:
+
+```sh
+TEAM=YOUR_APPLE_TEAM_ID ./scripts/install-ios.sh YOUR_DEVICE_UDID
+```
+
+To run the integration and interface tests, choose the ReelMobile scheme and an
+iPhone simulator, then use Product > Test. The tests cover edits, draft recovery,
+mixed-orientation MP4 export, added audio, and the mobile editing/share flow.
+The Photos picker smoke test needs a video in the simulator Photos library and
+skips when the library is empty or the simulator's Photos picker is unavailable.
+
 ## Record a screen region
 
 1. Click **Record** (or press **⇧⌘R**).
@@ -148,10 +203,10 @@ rebuilds.
 ## How it works
 
 The whole timeline is just an ordered list of `Chunk`s
-([`Sources/Models/Chunk.swift`](Sources/Models/Chunk.swift)), each holding a
+([`Shared/Models/Chunk.swift`](Shared/Models/Chunk.swift)), each holding a
 `sourceID`, a source time range, and a speed multiplier. Every edit takes a
 snapshot of that list for undo/redo, then rebuilds an `AVMutableComposition`
-([`Sources/ViewModels/EditorViewModel.swift`](Sources/ViewModels/EditorViewModel.swift)):
+([`Shared/Editing/EditorViewModel.swift`](Shared/Editing/EditorViewModel.swift)):
 each chunk's range is appended in order from its source video, and `scaleTimeRange`
 applies its speed. A matching `AVVideoComposition` places every source — whatever
 its size or orientation — into a common frame (the first clip's), aspect-fit and
@@ -161,13 +216,13 @@ centred. That one composition feeds both the live `AVPlayer` preview and the
 ## Project layout
 
 ```
-Sources/
-  App/         ReelApp.swift, AppCommands.swift   (entry point + menu shortcuts)
-  Models/      Chunk, ImportedAudioTrack             (video/audio timeline models)
-  ViewModels/  EditorViewModel.swift                (player, edits, undo, export)
-  Views/       ContentView, PreviewSection, TransportBar, ControlBar, SpeedControl,
-               TimelineView, EmptyStateView, ExportOverlay, StatusToast
-  Support/     Theme, Formatting, VideoExporter     (styling + export helpers)
+Shared/
+  Models/      Chunk, ImportedAudioTrack (shared timeline models)
+  Editing/     EditorViewModel (edits, composition, playback, undo, platform adapters)
+  Support/     Formatting, VideoExporter
+Sources/       macOS app, views, ScreenCaptureKit recorder, and shared theme
+iOS/           iPhone/iPad app, touch editor, Photos/Files import, sharing
+Tests/         iOS integration and interface tests
 ```
 
 The timeline is horizontally scrollable and zoomable; muting video audio drops
